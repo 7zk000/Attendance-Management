@@ -6,7 +6,7 @@
 ## 概要
 
 - 共有の打刻画面は `index.html` を起点に利用する
-- `kintai_hirakawa.html` と `kintai_wakayama.html` は、それぞれ専用のリダイレクトページ
+- 個別ページのリダイレクトは不要で、共通ページを直接利用する
 - データは Supabase で管理する
 - `register/kintai_register.html` でユーザーとデバイスを登録する
 - `manage.html` で月次集計を確認できる
@@ -36,8 +36,6 @@
 ```text
 kintai/
 ├── index.html                    ← 共通の打刻画面
-├── kintai_hirakawa.html          ← 平川用リダイレクト
-├── kintai_wakayama.html          ← 若山用リダイレクト
 ├── manage.html                   ← 管理画面
 ├── README.md
 ├── register/
