@@ -158,8 +158,14 @@ async function loadUserByToken(token, deviceId) {
   if (!rows || rows.length === 0) return null;
 
   if (deviceId) {
-    const byDevice = rows.find((row) => row.device_id === deviceId);
-    if (byDevice) return byDevice;
+    for (const row of rows) {
+      const deviceRows = await sbFetch(
+        `user_devices?user_id=eq.${encodeURIComponent(String(row.id))}&device_id=eq.${encodeURIComponent(deviceId)}&select=id`
+      );
+
+      if (deviceRows && deviceRows.length > 0) return row;
+      if (row.device_id === deviceId) return row;
+    }
   }
 
   return rows[0];
@@ -391,6 +397,10 @@ function renderApp(user) {
       <div class="history" id="history-panel" style="display:none">
         <h2 id="history-title">${getMonthLabel()}</h2>
         <div id="history-list"></div>
+      </div>
+
+      <div style="margin-top: 1rem; text-align: center;">
+        <button type="button" class="btn btn-fix" onclick="window.location.href='manage.html'">管理用画面へ</button>
       </div>
     </div>
   `;

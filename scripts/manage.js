@@ -1,11 +1,17 @@
 const env = typeof window !== 'undefined' ? window : {};
 const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_PROJECT_URL || '';
 const SUPABASE_KEY = env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_PUBLIC_KEY || '';
+const ADMIN_ACCESS_TOKEN = env.ADMIN_ACCESS_TOKEN || 'admin';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('Supabase config missing. Set window.SUPABASE_URL and window.SUPABASE_ANON_KEY before loading this script.');
 }
 
+const loginScreenEl = document.getElementById('admin-login-screen');
+const contentEl = document.getElementById('admin-content');
+const adminTokenInput = document.getElementById('admin-token');
+const adminLoginBtn = document.getElementById('admin-login-btn');
+const adminLoginError = document.getElementById('admin-login-error');
 const monthLabelEl = document.getElementById('month-label');
 const businessDaysEl = document.getElementById('business-days');
 const remainingBusinessDaysEl = document.getElementById('remaining-business-days');
@@ -14,6 +20,50 @@ const tableWrapEl = document.getElementById('table-wrap');
 const tbodyEl = document.getElementById('summary-body');
 const reloadBtn = document.getElementById('reload-btn');
 const monthInputEl = document.getElementById('month-input');
+
+function isAdminLoggedIn() {
+  return sessionStorage.getItem('kintai_admin_logged_in') === 'true';
+}
+
+function setAdminLoggedIn(state) {
+  sessionStorage.setItem('kintai_admin_logged_in', state ? 'true' : 'false');
+}
+
+function showAdminLogin() {
+  loginScreenEl.classList.remove('hidden');
+  contentEl.classList.add('hidden');
+}
+
+function showAdminContent() {
+  loginScreenEl.classList.add('hidden');
+  contentEl.classList.remove('hidden');
+}
+
+function handleLogin() {
+  const input = adminTokenInput.value.trim();
+  if (input === ADMIN_ACCESS_TOKEN) {
+    setAdminLoggedIn(true);
+    showAdminContent();
+    adminLoginError.style.display = 'none';
+    loadUserSummary();
+    return;
+  }
+
+  setAdminLoggedIn(false);
+  adminLoginError.style.display = 'block';
+  adminTokenInput.focus();
+}
+
+adminLoginBtn.addEventListener('click', handleLogin);
+adminTokenInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') handleLogin();
+});
+
+if (isAdminLoggedIn()) {
+  showAdminContent();
+} else {
+  showAdminLogin();
+}
 
 function formatMonthInputValue(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;

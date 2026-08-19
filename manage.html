@@ -8,7 +8,18 @@
   <link rel="stylesheet" href="style/manage.css">
 </head>
 <body>
-  <div class="container">
+  <div id="admin-login-screen" class="container hidden">
+    <div class="card" style="max-width: 360px; margin: 5rem auto; padding: 2rem;">
+      <p class="eyebrow">管理者ログイン</p>
+      <h1 style="margin: 0.5rem 0 1rem; font-size: 1.6rem;">勤怠管理画面</h1>
+      <label for="admin-token" style="display:block; margin-bottom: 0.5rem; color:#666;">管理者コード</label>
+      <input id="admin-token" type="password" placeholder="管理者コードを入力" style="width:100%; padding: 0.75rem; border:1px solid #dfe3ea; border-radius:10px; margin-bottom:1rem;" />
+      <button id="admin-login-btn" class="btn btn-primary" type="button">ログイン</button>
+      <p id="admin-login-error" style="display:none; color:#b42318; margin-top: 0.75rem; font-size:0.9rem;">管理者コードが違います。</p>
+    </div>
+  </div>
+
+  <div id="admin-content" class="container hidden">
     <header class="header">
       <div>
         <p class="eyebrow">管理画面</p>
