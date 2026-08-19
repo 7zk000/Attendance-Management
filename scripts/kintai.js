@@ -162,7 +162,13 @@ async function getMonthRecords(name) {
   const today = new Date();
   const year = today.getFullYear();
   const month = String(today.getMonth() + 1).padStart(2, '0');
-  const rows = await sbFetch(`kintai?name=eq.${encodeURIComponent(name)}&date=like.${encodeURIComponent(`${year}-${month}%`)}&select=date,work_hours,check_in,check_out`);
+  const start = `${year}-${month}-01`;
+  const nextMonth = new Date(year, today.getMonth() + 1, 1);
+  const nextMonthYmd = toDateInputValue(nextMonth);
+
+  const rows = await sbFetch(
+    `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(start)}&date=lt.${encodeURIComponent(nextMonthYmd)}&select=date,work_hours,check_in,check_out`
+  );
   return rows || [];
 }
 

@@ -149,9 +149,13 @@ async function loadUserSummary() {
     const businessStats = getBusinessDayStats(year, month);
     const summary = [];
 
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonthDate = new Date(year, month, 1);
+    const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+
     for (const name of names) {
       const records = await sbFetch(
-        `kintai?name=eq.${encodeURIComponent(name)}&date=like.${encodeURIComponent(`${monthKey}%`)}&select=work_hours,date`
+        `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(monthStart)}&date=lt.${encodeURIComponent(monthEnd)}&select=work_hours,date`
       );
 
       const totalHours = (records || []).reduce((sum, record) => sum + (Number(record.work_hours) || 0), 0);
