@@ -341,7 +341,7 @@ monthInputEl.value = formatMonthInputValue(now);
 monthInputEl.addEventListener('change', loadCurrentView);
 reloadBtn.addEventListener('click', loadCurrentView);
 backToAttendanceBtn.addEventListener('click', () => {
-  window.location.href = 'index.html';
+  window.location.href = '../index.html';
 });
 backToSummaryBtn.addEventListener('click', () => {
   window.location.href = 'manage.html?view=summary';

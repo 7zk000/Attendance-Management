@@ -8,14 +8,14 @@
 - 共有の打刻画面は `index.html` を起点に利用する
 - 発行された専用 URL から共通の打刻ページを利用する
 - データは Supabase で管理する
-- `register/kintai_register.html` でユーザーとデバイスを登録する
-- `manage.html` で月次集計を確認できる
+- `components/kintai_register.html` でユーザーとデバイスを登録する
+- `components/manage.html` で月次集計を確認できる
 
 ## 使い方
 
 ### 1. 初回登録
 
-1. `register/kintai_register.html` を開く
+1. `components/kintai_register.html` を開く
 2. 名前を入力して専用 URL を発行する
 3. 発行された URL をスマホのホーム画面に追加する
 4. URL を忘れた場合は同じページで同じ名前を入力すると同じ URL が再表示される
@@ -28,7 +28,7 @@
 
 ### 3. 管理
 
-- `manage.html` でユーザーごとの集計を確認できる
+- `components/manage.html` でユーザーごとの集計を確認できる
 
 ### 4. 月末処理(Excel自動転記)
 
@@ -53,10 +53,10 @@
 ```text
 kintai/
 ├── index.html                    ← 共通の打刻画面
-├── manage.html                   ← 管理画面
 ├── README.md
-├── register/
-│   └── kintai_register.html      ← 登録・URL発行ページ
+├── components/
+│   ├── kintai_register.html      ← 登録・URL発行ページ
+│   └── manage.html               ← 管理画面
 ├── scripts/
 │   ├── kintai.js                 ← 打刻アプリ本体
 │   ├── kintai_register.js        ← 登録ページ用JS

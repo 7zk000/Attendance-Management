@@ -133,7 +133,7 @@ function renderEmptyState(message) {
     <div class="card">
       <h1>勤怠打刻</h1>
       <p>${escapeHtml(message)}</p>
-      <a class="btn" href="register/kintai_register.html">登録ページへ</a>
+      <a class="btn" href="components/kintai_register.html">登録ページへ</a>
     </div>
   `;
 }
@@ -503,7 +503,7 @@ function renderApp(user) {
       </div>
 
       <div style="margin-top: 1rem; text-align: center;">
-        <button type="button" class="btn btn-fix" onclick="window.location.href='manage.html'">管理用画面へ</button>
+        <button type="button" class="btn btn-fix" onclick="window.location.href='components/manage.html'">管理用画面へ</button>
       </div>
     </div>
   `;
