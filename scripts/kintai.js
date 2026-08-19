@@ -297,6 +297,14 @@ function getFixReasonOptions() {
   return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', '退勤', '早退', 'その他'];
 }
 
+function syncFixTimeFields(reason) {
+  const noTimeRequired = reason === '有給' || reason === '病欠';
+  ['fix-checkin-row', 'fix-checkout-row'].forEach((id) => {
+    const row = document.getElementById(id);
+    if (row) row.style.display = noTimeRequired ? 'none' : 'block';
+  });
+}
+
 let fixActionKind = 'checkin';
 
 function updateAttendanceAction(todayRec) {
@@ -342,6 +350,7 @@ function updateAttendanceAction(todayRec) {
     const options = getFixReasonOptions();
     fixReason.innerHTML = options.map((label) => `<option value="${label}">${label}</option>`).join('');
     fixReason.value = options.includes(currentValue) ? currentValue : options[0];
+    syncFixTimeFields(fixReason.value);
   }
 }
 
@@ -421,7 +430,8 @@ async function submitFix() {
   const checkin = document.getElementById('fix-checkin').value;
   const checkout = document.getElementById('fix-checkout').value;
 
-  if (!date || !checkin || !checkout) {
+  const noTimeRequired = reason === '有給' || reason === '病欠';
+  if (!date || (!noTimeRequired && (!checkin || !checkout))) {
     showStatus('日付・出勤・退勤時間を入力してください', 'error');
     return;
   }
@@ -507,11 +517,11 @@ function renderApp(user) {
           <label>理由</label>
           <select id="fix-reason"></select>
         </div>
-        <div class="fix-row">
+        <div class="fix-row" id="fix-checkin-row">
           <label>出勤時間</label>
           <select id="fix-checkin"></select>
         </div>
-        <div class="fix-row">
+        <div class="fix-row" id="fix-checkout-row">
           <label>退勤時間</label>
           <select id="fix-checkout"></select>
         </div>
@@ -539,6 +549,8 @@ function renderApp(user) {
     fixReason.innerHTML = getFixReasonOptions()
       .map((label) => `<option value="${label}">${label}</option>`)
       .join('');
+    fixReason.addEventListener('change', () => syncFixTimeFields(fixReason.value));
+    syncFixTimeFields(fixReason.value);
   }
 
   const attendanceButton = document.getElementById('attendance-button');
