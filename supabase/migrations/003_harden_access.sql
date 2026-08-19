@@ -15,6 +15,8 @@ drop policy if exists "Allow anon full access to kintai" on public.kintai;
 drop policy if exists "Allow anon full access to user_devices" on public.user_devices;
 drop policy if exists "Allow anon insert user_devices" on public.user_devices;
 
+drop policy if exists "Allow anon read kintai" on public.kintai;
+
 create policy "Allow anon read kintai"
 on public.kintai
 for select
