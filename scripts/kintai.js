@@ -293,6 +293,39 @@ function getReasonOptions(kind) {
   return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', 'その他'];
 }
 
+function updateAttendanceAction(todayRec) {
+  const label = document.getElementById('attendance-label');
+  const date = document.getElementById('attendance-date');
+  const time = document.getElementById('attendance-time');
+  const kindSelect = document.getElementById('attendance-kind');
+  const button = document.getElementById('attendance-button');
+  if (!label || !date || !time || !kindSelect || !button) return;
+
+  const isCheckout = Boolean(todayRec && todayRec.check_in);
+  const isComplete = Boolean(todayRec && todayRec.check_out);
+  const kind = isCheckout ? 'checkout' : 'checkin';
+  const options = getReasonOptions(kind);
+
+  label.textContent = isCheckout ? '退勤' : '出勤';
+  date.textContent = toDateInputValue(new Date());
+  time.textContent = isCheckout ? (todayRec.check_out || '--:--') : (todayRec?.check_in || '--:--');
+  time.classList.toggle('done', Boolean(isCheckout ? todayRec?.check_out : todayRec?.check_in));
+
+  kindSelect.innerHTML = '';
+  options.forEach((optionValue) => {
+    const option = document.createElement('option');
+    option.value = optionValue;
+    option.textContent = optionValue;
+    kindSelect.appendChild(option);
+  });
+
+  button.dataset.kind = kind;
+  button.classList.toggle('btn-checkin', kind === 'checkin');
+  button.classList.toggle('btn-checkout', kind === 'checkout');
+  button.textContent = isComplete ? '退勤済み' : (isCheckout ? '退勤する' : '出勤する');
+  button.disabled = isComplete;
+}
+
 function renderHistory(rows) {
   const list = document.getElementById('history-list');
   if (!list) return;
@@ -431,40 +464,17 @@ function renderApp(user) {
       <div id="main" style="display:none">
         <div class="card attendance-card">
           <div class="attendance-section">
-          <div class="card-head">
-            <div class="card-label">出勤</div>
-            <div class="card-date" id="checkin-date">${toDateInputValue(new Date())}</div>
+            <div class="card-head">
+              <div class="card-label" id="attendance-label">出勤</div>
+              <div class="card-date" id="attendance-date">${toDateInputValue(new Date())}</div>
+            </div>
+            <div class="time-val" id="attendance-time">--:--</div>
+            <div class="fix-row" style="margin-bottom: 0.75rem;">
+              <select id="attendance-kind" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff;"></select>
+            </div>
+            <button class="btn btn-checkin" id="attendance-button" data-kind="checkin">出勤する</button>
           </div>
-          <div class="time-val" id="checkin-time">--:--</div>
-          <div class="fix-row" style="margin-bottom: 0.75rem;">
-            <select id="checkin-kind" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff;">
-              <option value="日勤">日勤</option>
-              <option value="夜勤">夜勤</option>
-              <option value="病欠">病欠</option>
-              <option value="有給">有給</option>
-              <option value="午前休">午前休</option>
-              <option value="午後休">午後休</option>
-              <option value="その他">その他</option>
-            </select>
-          </div>
-          <button class="btn btn-checkin" id="btn-checkin" data-kind="checkin">出勤する</button>
-          </div>
-          <div class="attendance-section">
-          <div class="card-head">
-            <div class="card-label">退勤</div>
-            <div class="card-date" id="checkout-date">${toDateInputValue(new Date())}</div>
-          </div>
-          <div class="time-val" id="checkout-time">--:--</div>
-          <div class="fix-row" style="margin-bottom: 0.75rem;">
-            <select id="checkout-kind" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff;">
-              <option value="退勤">退勤</option>
-              <option value="早退">早退</option>
-              <option value="その他">その他</option>
-            </select>
-          </div>
-          <button class="btn btn-checkout" id="btn-checkout" data-kind="checkout">退勤する</button>
           <button class="btn btn-fix" onclick="showFixPanel()">時間を修正する</button>
-          </div>
         </div>
       </div>
 
@@ -529,22 +539,12 @@ function renderApp(user) {
     syncFixReasonOptions();
   }
 
-  const main = document.getElementById('main');
-  const checkinBtn = document.getElementById('btn-checkin');
-  const checkoutBtn = document.getElementById('btn-checkout');
-
-  if (checkinBtn) {
-    checkinBtn.addEventListener('click', async () => {
-      const reason = document.getElementById('checkin-kind')?.value || '日勤';
-      await stamp('checkin', user.name, reason);
-      refreshAttendancePage();
-    });
-  }
-
-  if (checkoutBtn) {
-    checkoutBtn.addEventListener('click', async () => {
-      const reason = document.getElementById('checkout-kind')?.value || '退勤';
-      await stamp('checkout', user.name, reason);
+  const attendanceButton = document.getElementById('attendance-button');
+  if (attendanceButton) {
+    attendanceButton.addEventListener('click', async () => {
+      const kind = attendanceButton.dataset.kind || 'checkin';
+      const reason = document.getElementById('attendance-kind')?.value || (kind === 'checkout' ? '退勤' : '日勤');
+      await stamp(kind, user.name, reason);
       refreshAttendancePage();
     });
   }
@@ -578,37 +578,11 @@ async function refreshAttendancePage() {
   const main = document.getElementById('main');
   if (main) main.style.display = 'block';
 
-  const checkinNode = document.getElementById('checkin-time');
-  const checkoutNode = document.getElementById('checkout-time');
-  const checkinBtn = document.getElementById('btn-checkin');
-  const checkoutBtn = document.getElementById('btn-checkout');
-
-  if (todayRec) {
-    if (checkinNode) {
-      checkinNode.textContent = todayRec.check_in || '--:--';
-      if (todayRec.check_in) checkinNode.classList.add('done');
-    }
-    if (checkoutNode) {
-      checkoutNode.textContent = todayRec.check_out || '--:--';
-      if (todayRec.check_out) checkoutNode.classList.add('done');
-    }
-    if (checkinBtn) checkinBtn.disabled = Boolean(todayRec.check_in);
-    if (checkoutBtn) checkoutBtn.disabled = Boolean(todayRec.check_out);
-  } else {
-    if (checkinNode) checkinNode.textContent = '--:--';
-    if (checkoutNode) checkoutNode.textContent = '--:--';
-    if (checkinBtn) checkinBtn.disabled = false;
-    if (checkoutBtn) checkoutBtn.disabled = false;
-  }
+  updateAttendanceAction(todayRec);
 
   renderHistory(records || []);
   const historyPanel = document.getElementById('history-panel');
   if (historyPanel) historyPanel.style.display = 'block';
-
-  const checkinDate = document.getElementById('checkin-date');
-  const checkoutDate = document.getElementById('checkout-date');
-  if (checkinDate) checkinDate.textContent = toDateInputValue(new Date());
-  if (checkoutDate) checkoutDate.textContent = toDateInputValue(new Date());
 
   const fixDate = document.getElementById('fix-date');
   if (fixDate) {
