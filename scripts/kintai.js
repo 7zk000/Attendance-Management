@@ -293,6 +293,8 @@ function getReasonOptions(kind) {
   return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', 'その他'];
 }
 
+let fixActionKind = 'checkin';
+
 function updateAttendanceAction(todayRec) {
   const label = document.getElementById('attendance-label');
   const date = document.getElementById('attendance-date');
@@ -324,15 +326,18 @@ function updateAttendanceAction(todayRec) {
   button.classList.toggle('btn-checkout', kind === 'checkout');
   button.textContent = isComplete ? '退勤済み' : (isCheckout ? '退勤する' : '出勤する');
   button.disabled = isComplete;
+  fixActionKind = kind;
 
   const fixButton = document.getElementById('fix-button');
-  const fixKind = document.getElementById('fix-kind');
   if (fixButton) {
     fixButton.textContent = isCheckout ? '退勤時間を修正する' : '出勤時間を修正する';
   }
-  if (fixKind) {
-    fixKind.value = kind;
-    fixKind.dispatchEvent(new Event('change'));
+  const fixReason = document.getElementById('fix-reason');
+  if (fixReason) {
+    const currentValue = fixReason.value;
+    const options = getReasonOptions(fixActionKind);
+    fixReason.innerHTML = options.map((label) => `<option value="${label}">${label}</option>`).join('');
+    fixReason.value = options.includes(currentValue) ? currentValue : options[0];
   }
 }
 
@@ -407,7 +412,7 @@ async function upsertFixRecord({ date, checkin, checkout, name, kind = 'checkin'
 
 async function submitFix() {
   const date = document.getElementById('fix-date').value;
-  const kind = document.getElementById('fix-kind')?.value || 'checkin';
+  const kind = fixActionKind;
   const reason = document.getElementById('fix-reason')?.value || '日勤';
   const checkin = document.getElementById('fix-checkin').value;
   const checkout = document.getElementById('fix-checkout').value;
@@ -495,13 +500,6 @@ function renderApp(user) {
           <input type="date" id="fix-date">
         </div>
         <div class="fix-row">
-          <label>種別</label>
-          <select id="fix-kind">
-            <option value="checkin">出勤</option>
-            <option value="checkout">退勤</option>
-          </select>
-        </div>
-        <div class="fix-row">
           <label>理由</label>
           <select id="fix-reason"></select>
         </div>
@@ -532,21 +530,11 @@ function renderApp(user) {
 
   buildTimeOptions();
 
-  const fixKind = document.getElementById('fix-kind');
   const fixReason = document.getElementById('fix-reason');
-  if (fixKind && fixReason) {
-    const syncFixReasonOptions = () => {
-      const options = getReasonOptions(fixKind.value);
-      const currentValue = fixReason.value;
-      fixReason.innerHTML = options.map((label) => `<option value="${label}">${label}</option>`).join('');
-      if (options.includes(currentValue)) {
-        fixReason.value = currentValue;
-      } else {
-        fixReason.value = options[0];
-      }
-    };
-    fixKind.addEventListener('change', syncFixReasonOptions);
-    syncFixReasonOptions();
+  if (fixReason) {
+    fixReason.innerHTML = getReasonOptions(fixActionKind)
+      .map((label) => `<option value="${label}">${label}</option>`)
+      .join('');
   }
 
   const attendanceButton = document.getElementById('attendance-button');
