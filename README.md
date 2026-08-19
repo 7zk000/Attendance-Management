@@ -18,16 +18,33 @@
 1. `register/kintai_register.html` を開く
 2. 名前を入力して専用 URL を発行する
 3. 発行された URL をスマホのホーム画面に追加する
+4. URL を忘れた場合は同じページで同じ名前を入力すると同じ URL が再表示される
 
 ### 2. 打刻
 
 - 発行した URL を開くと専用の勤怠画面が表示される
-- 出勤・退勤・修正を行える
-- 今月の勤務時間の確認も可能
+- 出勤・退勤の打刻(30分単位・夜勤対応)、および打刻時間の修正を行える
+- 今月の合計勤務時間・営業日・残り営業日・勤務履歴を確認できる
 
 ### 3. 管理
 
 - `manage.html` でユーザーごとの集計を確認できる
+
+### 4. 月末処理(Excel自動転記)
+
+月末に `fill_attendance.py`(Excel自動転記スクリプト、本リポジトリ外で個別管理)を実行すると、Supabase の勤怠データを作業実績報告書(Excel)に自動転記できる。
+
+**初回セットアップ**
+
+1. Python をインストールする(Windows は「Add python.exe to PATH」に必ずチェック)
+2. `openpyxl` をインストールする: `python -m pip install openpyxl`(Mac は `python3` コマンド)
+3. 作業用フォルダに `fill_attendance.py` ・ `実行する.command`(Mac) / `実行する.bat`(Windows) ・先月分の作業実績報告書(`作業実績報告書_YYYYMM.xlsx`)を入れる
+4. `fill_attendance.py` 内の `TARGET_NAME` を自分の名前に書き換える
+
+**毎月の使い方**
+
+1. `実行する.command` / `実行する.bat` をダブルクリックする
+2. 前月の Excel が自動で「過去」フォルダに移動し、当月分の Excel が生成される
 
 ---
 
@@ -48,13 +65,12 @@ kintai/
 │   ├── kintai.css                ← 打刻画面のスタイル
 │   ├── kintai_register.css       ← 登録ページのスタイル
 │   └── manage.css                ← 管理画面のスタイル
-├── sample/
-│   └── kintai-main/
-│       ├── fill_attendance.py     ← Excel 自動転記スクリプト
-│       ├── 実行する.command       ← Mac 用ランチャー
-│       └── 実行する.bat           ← Windows 用ランチャー
-├── LICENSE
-└── ...
+├── supabase/
+│   └── migrations/               ← Supabase の SQL Editor で順番に実行するマイグレーション
+│       ├── 001_create_attendance_tables.sql
+│       ├── 002_allow_anon_insert_user_devices.sql
+│       └── 003_harden_access.sql
+└── LICENSE
 ```
 
 ---
@@ -62,6 +78,5 @@ kintai/
 ## 補足
 
 - Supabase の接続情報は各環境に合わせて設定する
-- `sample/kintai-main/fill_attendance.py` は月末処理用の補助スクリプト
-- `sample/kintai-main/` には旧版のサンプル一式を保持している
+- 新しい環境で使う場合は `supabase/migrations/` 配下の SQL を番号順に Supabase の SQL Editor で実行してセットアップする
 
