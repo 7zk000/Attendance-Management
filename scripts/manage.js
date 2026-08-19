@@ -200,7 +200,7 @@ function formatRemainingHours(value) {
 
 function renderRows(rows) {
   if (!rows.length) {
-    tbodyEl.innerHTML = '<tr><td colspan="8" class="empty">登録されているユーザーがありません。</td></tr>';
+    tbodyEl.innerHTML = '<tr><td colspan="9" class="empty">登録されているユーザーがありません。</td></tr>';
     return;
   }
 
@@ -216,7 +216,8 @@ function renderRows(rows) {
         <td>${escapeHtml(row.name)}</td>
         <td>${formatHours(row.totalHours)}</td>
         <td>${row.workDays}日</td>
-        <td>${row.restDays}日</td>
+        <td>${row.sickDays}日</td>
+        <td>${row.earlyLeaveDays}日</td>
         <td>${formatHours(row.avgHours)}</td>
         <td>${formatRemainingHours(row.remainingTo200)}</td>
         <td>
@@ -304,12 +305,13 @@ async function loadUserSummary() {
 
     for (const name of names) {
       const records = await sbFetch(
-        `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(monthStart)}&date=lt.${encodeURIComponent(monthEnd)}&select=work_hours,date`
+        `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(monthStart)}&date=lt.${encodeURIComponent(monthEnd)}&select=work_hours,date,remarks`
       );
 
       const totalHours = (records || []).reduce((sum, record) => sum + (Number(record.work_hours) || 0), 0);
       const workDays = (records || []).filter((record) => Number(record.work_hours) > 0).length;
-      const restDays = Math.max(0, businessStats.total - workDays);
+      const sickDays = (records || []).filter((record) => record.remarks === '病欠').length;
+      const earlyLeaveDays = (records || []).filter((record) => record.remarks === '早退').length;
       const avgHours = workDays > 0 ? totalHours / workDays : 0;
       const remainingTo200 = Math.max(0, 200 - totalHours);
 
@@ -317,7 +319,8 @@ async function loadUserSummary() {
         name,
         totalHours,
         workDays,
-        restDays,
+        sickDays,
+        earlyLeaveDays,
         avgHours,
         remainingTo200
       });
@@ -328,7 +331,7 @@ async function loadUserSummary() {
     remainingBusinessDaysEl.textContent = `${businessStats.remaining}日`;
     renderRows(summary);
   } catch (error) {
-    tbodyEl.innerHTML = '<tr><td colspan="8" class="empty">データの取得に失敗しました。</td></tr>';
+    tbodyEl.innerHTML = '<tr><td colspan="9" class="empty">データの取得に失敗しました。</td></tr>';
     console.error(error);
   } finally {
     loadingEl.classList.add('hidden');
