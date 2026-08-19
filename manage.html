@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>勤怠管理</title>
+  <link rel="stylesheet" href="style/manage.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div>
+        <p class="eyebrow">管理画面</p>
+        <h1>ユーザー稼働時間一覧</h1>
+      </div>
+      <div class="header-actions">
+        <label class="month-picker">
+          <span>対象月</span>
+          <input id="month-input" type="month" />
+        </label>
+        <button id="reload-btn" class="btn btn-primary" type="button">更新</button>
+      </div>
+    </header>
+
+    <div class="summary-grid">
+      <div class="card summary-card">
+        <div class="label">対象月</div>
+        <div class="value" id="month-label">-</div>
+      </div>
+      <div class="card summary-card">
+        <div class="label">今月の営業日</div>
+        <div class="value" id="business-days">-</div>
+      </div>
+      <div class="card summary-card">
+        <div class="label">残りの営業日</div>
+        <div class="value" id="remaining-business-days">-</div>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <div class="table-header">
+        <h2>稼働時間一覧</h2>
+      </div>
+
+      <div id="loading" class="loading">読み込み中...</div>
+
+      <div id="table-wrap" class="table-wrap hidden">
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>ユーザ名</th>
+              <th>稼働時間</th>
+              <th>出勤日数</th>
+              <th>休みの数</th>
+              <th>一日平均の稼働時間</th>
+              <th>200hまで残り何時間か</th>
+            </tr>
+          </thead>
+          <tbody id="summary-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts/manage.js"></script>
+</body>
+</html>

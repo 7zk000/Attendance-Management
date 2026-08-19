@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>勤怠 - ユーザー登録</title>
+<link rel="stylesheet" href="../style/kintai_register.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>勤怠打刻</h1>
+    <p>名前を入力して登録すると<br>あなた専用のURLが発行されます。</p>
+
+    <div class="status" id="status"></div>
+
+    <div id="form-area">
+      <label>名前</label>
+      <input type="text" id="name-input" placeholder="例: 若山直樹">
+      <button class="btn" onclick="register()">登録 / URLを確認する</button>
+    </div>
+
+    <div class="result" id="result">
+      <div class="result-label">あなた専用のURLはこちらです</div>
+      <div class="url-box" id="url-box"></div>
+      <button class="btn btn-copy" onclick="copyUrl()">URLをコピーする</button>
+      <p class="msg">このURLをホーム画面に追加してください。<br>次回からはこのURLを開くだけでOKです。</p>
+    </div>
+  </div>
+</div>
+
+<script src="../scripts/kintai_register.js"></script>
+</body>
+</html>
