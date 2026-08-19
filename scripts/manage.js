@@ -80,7 +80,26 @@ async function sbFetch(path, options = {}) {
   });
 
   if (res.status === 204) return null;
-  return res.json();
+
+  const text = await res.text();
+  if (!res.ok) {
+    console.error('Supabase API error:', {
+      path,
+      status: res.status,
+      statusText: res.statusText,
+      body: text,
+      options
+    });
+    throw new Error(`Supabase API error: ${res.status} ${res.statusText} :: ${text}`);
+  }
+
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.error('Supabase response was not JSON:', { path, text });
+    return null;
+  }
 }
 
 function formatHours(value) {
