@@ -1,0 +1,40 @@
+/*
+ * Rabee UI color tokens, customized for this app (dark-first, per product request).
+ * See https://rabeeui.com/docs/setup — Rabee UI ships as copy-in components whose
+ * classes reference these tokens (bg-surface, border-input, text-muted-foreground,
+ * border-destructive, outline-ring, ...), so we define the token values here rather
+ * than relying on Rabee UI's own defaults.
+ */
+@theme {
+	--color-background: #020617; /* slate-950 */
+	--color-foreground: #f1f5f9; /* slate-100 */
+	--color-surface: #0f172a; /* slate-900 */
+	--color-border: #1e293b; /* slate-800 */
+	--color-input: #334155; /* slate-700 */
+	--color-ring: #3b82f6; /* blue-500 */
+	--color-muted-foreground: #64748b; /* slate-500 */
+	--color-accent: #1e293b; /* slate-800, hover overlay */
+	--color-accent-foreground: #f1f5f9;
+
+	--color-primary: #2563eb; /* blue-600 */
+	--color-primary-foreground: #ffffff;
+	--color-secondary: #1e293b; /* slate-800 */
+	--color-secondary-foreground: #cbd5e1; /* slate-300 */
+	--color-success: #059669; /* emerald-600 */
+	--color-success-foreground: #ffffff;
+	--color-warning: #ea580c; /* orange-600, used for the checkout action */
+	--color-warning-foreground: #ffffff;
+	--color-destructive: #e11d48; /* rose-600 */
+	--color-destructive-foreground: #ffffff;
+}
+
+body {
+	font-family:
+		ui-sans-serif,
+		system-ui,
+		-apple-system,
+		'Hiragino Kaku Gothic ProN',
+		'Hiragino Sans',
+		Meiryo,
+		sans-serif;
+}
