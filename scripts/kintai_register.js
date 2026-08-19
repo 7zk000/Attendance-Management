@@ -123,7 +123,11 @@ async function register() {
   }
 
   if (user && user.id) {
-    await upsertUserDevice(user.id, deviceId);
+    try {
+      await upsertUserDevice(user.id, deviceId);
+    } catch (error) {
+      console.warn('Optional user device registration failed:', error);
+    }
   }
 
   localStorage.setItem('kintai_session', JSON.stringify({ name, token, deviceId }));
