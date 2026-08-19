@@ -8,25 +8,6 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const appEl = document.getElementById('app');
 
-function getDeviceId() {
-  const key = 'kintai_device_id';
-  let deviceId = localStorage.getItem(key);
-  if (!deviceId) {
-    const raw = [
-      navigator.userAgent,
-      navigator.platform,
-      screen.width,
-      screen.height,
-      Intl.DateTimeFormat().resolvedOptions().timeZone,
-      navigator.language,
-      Date.now().toString(36)
-    ].join('|');
-    deviceId = btoa(encodeURIComponent(raw)).replace(/=+$/g, '').slice(0, 32);
-    localStorage.setItem(key, deviceId);
-  }
-  return deviceId;
-}
-
 function getSession() {
   const raw = localStorage.getItem('kintai_session');
   if (!raw) return null;
@@ -87,6 +68,13 @@ async function sbFetch(path, options = {}) {
     console.error('Supabase response was not JSON:', { path, text });
     return null;
   }
+}
+
+async function sbRpc(fnName, params) {
+  return sbFetch(`rpc/${fnName}`, {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
 }
 
 function calcWorkHours(checkin, checkout) {
@@ -150,25 +138,11 @@ function renderEmptyState(message) {
   `;
 }
 
-async function loadUserByToken(token, deviceId) {
+async function loadUserByToken(token) {
   if (!token) return null;
 
-  const baseQuery = `users?token=eq.${encodeURIComponent(token)}&select=id,name,token,device_id`;
-  const rows = await sbFetch(baseQuery);
-  if (!rows || rows.length === 0) return null;
-
-  if (deviceId) {
-    for (const row of rows) {
-      const deviceRows = await sbFetch(
-        `user_devices?user_id=eq.${encodeURIComponent(String(row.id))}&device_id=eq.${encodeURIComponent(deviceId)}&select=id`
-      );
-
-      if (deviceRows && deviceRows.length > 0) return row;
-      if (row.device_id === deviceId) return row;
-    }
-  }
-
-  return rows[0];
+  const rows = await sbRpc('load_user_by_token', { p_token: token });
+  return rows && rows.length ? rows[0] : null;
 }
 
 async function getTodayRecord(name) {
@@ -385,48 +359,35 @@ function renderHistory(rows) {
   }).join('');
 }
 
-async function upsertFixRecord({ date, checkin, checkout, name, kind = 'checkin', remarks = '日勤' }) {
+async function upsertFixRecord({ date, checkin, checkout, kind = 'checkin', remarks = '日勤' }) {
+  const name = userNameForRender;
+  const token = userTokenForRender;
+
   const existing = await sbFetch(
     `kintai?name=eq.${encodeURIComponent(name)}&date=eq.${encodeURIComponent(date)}&select=*`
   );
 
   const workHours = resolveReasonWorkHours(remarks, checkin, checkout);
   const noTimeRequired = remarks === '病欠';
+  const row = existing && existing.length ? existing[0] : null;
 
-  if (existing && existing.length) {
-    const row = existing[0];
-    const nextPayload = {
-      check_in: noTimeRequired ? null : (kind === 'checkin' ? checkin : (row.check_in || checkin)),
-      check_out: noTimeRequired ? null : (kind === 'checkout' ? checkout : (row.check_out || checkout)),
-      work_hours: workHours,
-      remarks,
-      checkin_at: noTimeRequired ? null : row.checkin_at,
-      checkout_at: noTimeRequired ? null : row.checkout_at
-    };
+  const payload = {
+    p_token: token,
+    p_date: date,
+    p_check_in: noTimeRequired ? null : (kind === 'checkin' ? checkin : (row?.check_in || checkin)),
+    p_check_out: noTimeRequired ? null : (kind === 'checkout' ? checkout : (row?.check_out || checkout)),
+    p_checkin_at: noTimeRequired
+      ? null
+      : (row ? row.checkin_at : (kind === 'checkin' ? new Date(`${date}T${checkin}:00`).toISOString() : null)),
+    p_checkout_at: noTimeRequired
+      ? null
+      : (row ? row.checkout_at : (kind === 'checkout' ? new Date(`${date}T${checkout}:00`).toISOString() : null)),
+    p_work_hours: workHours,
+    p_remarks: remarks
+  };
 
-    await sbFetch(`kintai?id=eq.${row.id}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify(nextPayload)
-    });
-    return 'updated';
-  }
-
-  await sbFetch('kintai', {
-    method: 'POST',
-    body: JSON.stringify({
-      name,
-      date,
-      check_in: noTimeRequired ? null : (kind === 'checkin' ? checkin : null),
-      check_out: noTimeRequired ? null : (kind === 'checkout' ? checkout : null),
-      work_hours: workHours,
-      remarks,
-      checkin_at: noTimeRequired || kind !== 'checkin' ? null : new Date(`${date}T${checkin}:00`).toISOString(),
-      checkout_at: noTimeRequired || kind !== 'checkout' ? null : new Date(`${date}T${checkout}:00`).toISOString()
-    })
-  });
-
-  return 'created';
+  await sbRpc('fix_kintai', payload);
+  return row ? 'updated' : 'created';
 }
 
 async function submitFix() {
@@ -442,9 +403,8 @@ async function submitFix() {
     return;
   }
 
-  const name = userNameForRender;
-  if (!name) {
-    showStatus('ユーザー名を特定できませんでした', 'error');
+  if (!userNameForRender || !userTokenForRender) {
+    showStatus('ユーザー情報を特定できませんでした', 'error');
     return;
   }
 
@@ -452,7 +412,6 @@ async function submitFix() {
     date,
     checkin,
     checkout,
-    name,
     kind,
     remarks: reason
   });
@@ -466,6 +425,7 @@ async function submitFix() {
 function renderApp(user) {
   const businessDays = calcBusinessDays();
   userNameForRender = user.name;
+  userTokenForRender = user.token;
 
   appEl.innerHTML = `
     <div class="wrap">
@@ -564,7 +524,7 @@ function renderApp(user) {
     attendanceButton.addEventListener('click', async () => {
       const kind = attendanceButton.dataset.kind || 'checkin';
       const reason = document.getElementById('attendance-kind')?.value || (kind === 'checkout' ? '退勤' : '日勤');
-      await stamp(kind, user.name, reason);
+      await stamp(kind, user.token, reason);
       refreshAttendancePage();
     });
   }
@@ -573,6 +533,7 @@ function renderApp(user) {
 }
 
 let userNameForRender = '';
+let userTokenForRender = '';
 
 async function refreshAttendancePage() {
   if (!userNameForRender) return;
@@ -615,59 +576,27 @@ async function refreshAttendancePage() {
   if (fixCheckout && todayRec && todayRec.check_out) fixCheckout.value = todayRec.check_out;
 }
 
-async function stamp(kind, name, reason = '日勤') {
+async function stamp(kind, token, reason = '日勤') {
   const now = new Date();
-  const date = toDateInputValue(now);
   const time = now.toTimeString().slice(0, 5);
 
-  const current = await getTodayRecord(name);
+  const current = await getTodayRecord(userNameForRender);
 
-  if (!current) {
-    const payload = {
-      name,
-      date,
-      check_in: kind === 'checkin' ? time : null,
-      check_out: kind === 'checkout' ? time : null,
-      checkin_at: kind === 'checkin' ? now.toISOString() : null,
-      checkout_at: kind === 'checkout' ? now.toISOString() : null,
-      work_hours: 0,
-      remarks: reason
-    };
+  const workHours = kind === 'checkout'
+    ? resolveReasonWorkHours(
+        reason,
+        current?.checkin_at || current?.check_in,
+        current?.checkout_at || now.toISOString()
+      )
+    : (current?.work_hours || 0);
 
-    await sbFetch('kintai', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    return;
-  }
-
-  const nextPayload = {
-    ...current,
-    remarks: reason,
-    check_in: kind === 'checkin' ? (current.check_in || time) : current.check_in,
-    check_out: kind === 'checkout' ? (current.check_out || time) : current.check_out,
-    checkin_at: kind === 'checkin' ? (current.checkin_at || now.toISOString()) : current.checkin_at,
-    checkout_at: kind === 'checkout' ? (current.checkout_at || now.toISOString()) : current.checkout_at,
-    work_hours: kind === 'checkout'
-      ? resolveReasonWorkHours(
-          reason,
-          current.checkin_at || current.check_in,
-          kind === 'checkout' ? (current.checkout_at || now.toISOString()) : now.toISOString()
-        )
-      : current.work_hours || 0
-  };
-
-  await sbFetch(`kintai?id=eq.${current.id}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      check_in: nextPayload.check_in,
-      check_out: nextPayload.check_out,
-      checkin_at: nextPayload.checkin_at,
-      checkout_at: nextPayload.checkout_at,
-      work_hours: nextPayload.work_hours,
-      remarks: nextPayload.remarks
-    })
+  await sbRpc('stamp_kintai', {
+    p_token: token,
+    p_kind: kind,
+    p_time: time,
+    p_at: now.toISOString(),
+    p_work_hours: workHours,
+    p_remarks: reason
   });
 }
 
@@ -675,22 +604,19 @@ async function init() {
   if (!appEl) return;
 
   const queryToken = getQueryParam('token');
-  const queryDevice = getQueryParam('device');
-
   const session = getSession();
-  const deviceId = getDeviceId();
 
   let user = null;
 
   if (queryToken) {
-    user = await loadUserByToken(queryToken, queryDevice || deviceId);
+    user = await loadUserByToken(queryToken);
     if (user) {
-      setSession({ name: user.name, token: user.token, deviceId: user.device_id || deviceId });
+      setSession({ name: user.name, token: user.token });
     }
   }
 
   if (!user && session && session.name && session.token) {
-    user = await loadUserByToken(session.token, session.deviceId || deviceId);
+    user = await loadUserByToken(session.token);
   }
 
   if (!user) {

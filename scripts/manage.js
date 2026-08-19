@@ -183,6 +183,13 @@ async function sbFetch(path, options = {}) {
   }
 }
 
+async function sbRpc(fnName, params) {
+  return sbFetch(`rpc/${fnName}`, {
+    method: 'POST',
+    body: JSON.stringify(params)
+  });
+}
+
 function formatHours(value) {
   return `${(Number(value) || 0).toFixed(1)} h`;
 }
@@ -206,7 +213,7 @@ function renderRows(rows) {
     return `
       <tr class="${rowClass}">
         <td>${index + 1}</td>
-        <td>${row.name}</td>
+        <td>${escapeHtml(row.name)}</td>
         <td>${formatHours(row.totalHours)}</td>
         <td>${row.workDays}日</td>
         <td>${row.restDays}日</td>
@@ -283,8 +290,8 @@ async function loadUserSummary() {
   tableWrapEl.classList.add('hidden');
 
   try {
-    const users = await sbFetch('users?select=name');
-    const names = [...new Set((users || []).map((user) => user.name).filter(Boolean))];
+    const userNames = await sbRpc('list_user_names', {});
+    const names = [...new Set((userNames || []).map((row) => row.name).filter(Boolean))];
 
     const { year, month } = getMonthFromInput();
     const monthKey = `${year}/${String(month).padStart(2, '0')}`;

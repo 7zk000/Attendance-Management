@@ -75,17 +75,10 @@ function showStatus(msg) {
   el.style.display = 'block';
 }
 
-async function upsertUserDevice(userId, deviceId) {
-  const rows = await sbFetch(
-    `user_devices?user_id=eq.${encodeURIComponent(String(userId))}&device_id=eq.${encodeURIComponent(deviceId)}&select=id`
-  );
-
-  if (rows && rows.length > 0) return;
-
-  await sbFetch('user_devices', {
+async function sbRpc(fnName, params) {
+  return sbFetch(`rpc/${fnName}`, {
     method: 'POST',
-    headers: { 'Prefer': 'return=minimal' },
-    body: JSON.stringify({ user_id: userId, device_id: deviceId })
+    body: JSON.stringify(params)
   });
 }
 
@@ -94,45 +87,25 @@ async function register() {
   if (!name) { showStatus('名前を入力してください'); return; }
 
   const deviceId = getDeviceId();
-  const existing = await sbFetch(`users?name=eq.${encodeURIComponent(name)}&select=id,name,token,device_id`);
+  const newToken = generateToken();
 
-  let user;
-  let token;
+  const created = await sbRpc('register_user', { p_name: name, p_token: newToken, p_device_id: deviceId });
+  const user = created && created.length > 0 ? created[0] : null;
 
-  if (existing && existing.length > 0) {
-    user = existing[0];
-    token = user.token;
-
-    if (!user.device_id) {
-      await sbFetch(`users?id=eq.${user.id}`, {
-        method: 'PATCH',
-        headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ device_id: deviceId })
-      });
-    }
-  } else {
-    token = generateToken();
-    await sbFetch('users', {
-      method: 'POST',
-      headers: { 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ name, token, device_id: deviceId })
-    });
-
-    const created = await sbFetch(`users?name=eq.${encodeURIComponent(name)}&token=eq.${encodeURIComponent(token)}&select=id,name,token,device_id`);
-    user = created && created.length > 0 ? created[0] : null;
+  if (!user) {
+    showStatus('登録に失敗しました');
+    return;
   }
 
-  if (user && user.id) {
-    try {
-      await upsertUserDevice(user.id, deviceId);
-    } catch (error) {
-      console.warn('Optional user device registration failed:', error);
-    }
+  try {
+    await sbRpc('upsert_user_device', { p_token: user.token, p_device_id: deviceId });
+  } catch (error) {
+    console.warn('Optional user device registration failed:', error);
   }
 
-  localStorage.setItem('kintai_session', JSON.stringify({ name, token, deviceId }));
+  localStorage.setItem('kintai_session', JSON.stringify({ name: user.name, token: user.token, deviceId }));
 
-  const url = `${BASE_URL}?token=${token}&device=${encodeURIComponent(deviceId)}`;
+  const url = `${BASE_URL}?token=${user.token}&device=${encodeURIComponent(deviceId)}`;
   document.getElementById('url-box').textContent = url;
   document.getElementById('result').style.display = 'block';
   document.getElementById('status').style.display = 'none';
