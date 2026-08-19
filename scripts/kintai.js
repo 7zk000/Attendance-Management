@@ -298,7 +298,7 @@ function getFixReasonOptions() {
 }
 
 function syncFixTimeFields(reason) {
-  const noTimeRequired = reason === '有給' || reason === '病欠';
+  const noTimeRequired = reason === '病欠';
   ['fix-checkin-row', 'fix-checkout-row'].forEach((id) => {
     const row = document.getElementById(id);
     if (row) row.style.display = noTimeRequired ? 'none' : 'block';
@@ -430,7 +430,7 @@ async function submitFix() {
   const checkin = document.getElementById('fix-checkin').value;
   const checkout = document.getElementById('fix-checkout').value;
 
-  const noTimeRequired = reason === '有給' || reason === '病欠';
+  const noTimeRequired = reason === '病欠';
   if (!date || (!noTimeRequired && (!checkin || !checkout))) {
     showStatus('日付・出勤・退勤時間を入力してください', 'error');
     return;
