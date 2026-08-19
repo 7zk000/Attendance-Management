@@ -118,8 +118,15 @@ function renderEmptyState(message) {
 async function loadUserByToken(token, deviceId) {
   if (!token) return null;
 
-  const rows = await sbFetch(`users?token=eq.${encodeURIComponent(token)}&device_id=eq.${encodeURIComponent(deviceId)}&select=id,name,token,device_id`);
+  const baseQuery = `users?token=eq.${encodeURIComponent(token)}&select=id,name,token,device_id`;
+  const rows = await sbFetch(baseQuery);
   if (!rows || rows.length === 0) return null;
+
+  if (deviceId) {
+    const byDevice = rows.find((row) => row.device_id === deviceId);
+    if (byDevice) return byDevice;
+  }
+
   return rows[0];
 }
 
@@ -283,10 +290,10 @@ async function init() {
 
   let user = null;
 
-  if (queryToken && queryDevice) {
-    user = await loadUserByToken(queryToken, queryDevice);
+  if (queryToken) {
+    user = await loadUserByToken(queryToken, queryDevice || deviceId);
     if (user) {
-      setSession({ name: user.name, token: user.token, deviceId: deviceId });
+      setSession({ name: user.name, token: user.token, deviceId: user.device_id || deviceId });
     }
   }
 
