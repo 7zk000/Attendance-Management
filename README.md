@@ -38,8 +38,9 @@
 
 1. Python をインストールする(Windows は「Add python.exe to PATH」に必ずチェック)
 2. `openpyxl` をインストールする: `python -m pip install openpyxl`(Mac は `python3` コマンド)
-3. 作業用フォルダに `fill_attendance.py` ・ `実行する.command`(Mac) / `実行する.bat`(Windows) ・先月分の作業実績報告書(`作業実績報告書_YYYYMM.xlsx`)を入れる
-4. `fill_attendance.py` 内の `TARGET_NAME` を自分の名前に書き換える
+3. 本リポジトリの `app/` フォルダの中身(`fill_attendance.py` ・ `実行する.command`(Mac) ・ `実行する.bat`(Windows))を丸ごとダウンロードし、作業用フォルダに入れる(GitHub上で `app/` を開き、各ファイルを個別にダウンロードするか、リポジトリ全体をZIPでダウンロードして `app/` フォルダだけ取り出す)
+4. 同じ作業用フォルダに先月分の作業実績報告書(`作業実績報告書_YYYYMM.xlsx`)を入れる
+5. `fill_attendance.py` 内の `TARGET_NAME` を自分の名前に書き換える
 
 **毎月の使い方**
 
