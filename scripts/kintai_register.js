@@ -1,5 +1,6 @@
-const SUPABASE_URL = 'https://orkwjindnxjkaplsbcdb.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_selWw3fEQWrExooHJZTt_w_7OKkA3hQ';
+const env = typeof window !== 'undefined' ? window : {};
+const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || 'https://orkwjindnxjkaplsbcdb.supabase.co';
+const SUPABASE_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || 'sb_publishable_selWw3fEQWrExooHJZTt_w_7OKkA3hQ';
 const BASE_URL = 'https://attendance-management-two-lyart.vercel.app/';
 
 function getDeviceId() {
