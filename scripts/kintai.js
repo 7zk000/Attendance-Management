@@ -270,6 +270,29 @@ function calcBusinessDays() {
   return { total, remaining, todayIndex };
 }
 
+function resolveReasonWorkHours(reason, checkinValue, checkoutValue) {
+  switch (reason) {
+    case '有給':
+      return 9;
+    case '午前休':
+    case '午後休':
+      return 4.5;
+    case '病欠':
+    case 'その他':
+      return 0;
+    default:
+      return calcWorkHours(checkinValue, checkoutValue);
+  }
+}
+
+function getReasonOptions(kind) {
+  if (kind === 'checkout') {
+    return ['退勤', '早退', 'その他'];
+  }
+
+  return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', 'その他'];
+}
+
 function renderHistory(rows) {
   const list = document.getElementById('history-list');
   if (!list) return;
@@ -284,18 +307,65 @@ function renderHistory(rows) {
     const date = new Date(row.date);
     const dayName = days[date.getDay()];
     const dateText = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}(${dayName})`;
+    const reason = escapeHtml(row.remarks || '出勤');
     return `
       <div class="history-row">
         <div class="history-date">${dateText}</div>
-        <div class="history-time">${escapeHtml(row.check_in || '--:--')} → ${escapeHtml(row.check_out || '--:--')}</div>
+        <div class="history-time">
+          <div>${escapeHtml(row.check_in || '--:--')} → ${escapeHtml(row.check_out || '--:--')}</div>
+          <div style="font-size: 11px; color: #888; margin-top: 2px;">理由: ${reason}</div>
+        </div>
         <div class="history-hours">${(Number(row.work_hours) || 0).toFixed(1)}h</div>
       </div>
     `;
   }).join('');
 }
 
+async function upsertFixRecord({ date, checkin, checkout, name, kind = 'checkin', remarks = '日勤' }) {
+  const existing = await sbFetch(
+    `kintai?name=eq.${encodeURIComponent(name)}&date=eq.${encodeURIComponent(date)}&select=*`
+  );
+
+  const workHours = resolveReasonWorkHours(remarks, checkin, checkout);
+
+  if (existing && existing.length) {
+    const row = existing[0];
+    const nextPayload = {
+      check_in: kind === 'checkin' ? checkin : (row.check_in || checkin),
+      check_out: kind === 'checkout' ? checkout : (row.check_out || checkout),
+      work_hours: workHours,
+      remarks
+    };
+
+    await sbFetch(`kintai?id=eq.${row.id}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify(nextPayload)
+    });
+    return 'updated';
+  }
+
+  await sbFetch('kintai', {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      date,
+      check_in: kind === 'checkin' ? checkin : null,
+      check_out: kind === 'checkout' ? checkout : null,
+      work_hours: workHours,
+      remarks,
+      checkin_at: kind === 'checkin' ? new Date(`${date}T${checkin}:00`).toISOString() : null,
+      checkout_at: kind === 'checkout' ? new Date(`${date}T${checkout}:00`).toISOString() : null
+    })
+  });
+
+  return 'created';
+}
+
 async function submitFix() {
   const date = document.getElementById('fix-date').value;
+  const kind = document.getElementById('fix-kind')?.value || 'checkin';
+  const reason = document.getElementById('fix-reason')?.value || '日勤';
   const checkin = document.getElementById('fix-checkin').value;
   const checkout = document.getElementById('fix-checkout').value;
 
@@ -304,21 +374,19 @@ async function submitFix() {
     return;
   }
 
-  const target = await sbFetch(`kintai?name=eq.${encodeURIComponent(userNameForRender)}&date=eq.${encodeURIComponent(date)}&select=id`);
-  if (!target || !target.length) {
-    showStatus('修正対象の日付のデータが見つかりません', 'error');
+  const name = userNameForRender;
+  if (!name) {
+    showStatus('ユーザー名を特定できませんでした', 'error');
     return;
   }
 
-  const workHours = calcWorkHours(checkin, checkout);
-  await sbFetch(`kintai?id=eq.${target[0].id}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      check_in: checkin,
-      check_out: checkout,
-      work_hours: workHours
-    })
+  await upsertFixRecord({
+    date,
+    checkin,
+    checkout,
+    name,
+    kind,
+    remarks: reason
   });
 
   showStatus('修正しました', 'ok');
@@ -341,20 +409,20 @@ function renderApp(user) {
 
       <div class="stats-grid">
         <div class="stat-card">
-          <div class="stat-label">今月の合計勤務</div>
+          <div class="stat-label">合計稼働時間</div>
           <div><span class="stat-value green" id="monthly-total">--</span><span class="stat-unit">h</span></div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">営業日 <span id="biz-today-index" style="font-size:10px;color:#aaa">(${businessDays.todayIndex}日目)</span></div>
-          <div><span class="stat-value" id="biz-total">${businessDays.total}</span><span class="stat-unit">日</span></div>
         </div>
         <div class="stat-card">
           <div class="stat-label">残り営業日</div>
           <div><span class="stat-value orange" id="biz-remaining">${businessDays.remaining}</span><span class="stat-unit">日</span></div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">出勤日数</div>
-          <div><span class="stat-value" id="work-days">--</span><span class="stat-unit">日</span></div>
+          <div class="stat-label">1日平均稼働時間</div>
+          <div><span class="stat-value" id="avg-hours">--</span><span class="stat-unit">h</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">今月の営業日数</div>
+          <div><span class="stat-value" id="biz-total-text">${businessDays.total}</span><span class="stat-unit">日</span></div>
         </div>
       </div>
 
@@ -362,13 +430,37 @@ function renderApp(user) {
 
       <div id="main" style="display:none">
         <div class="card">
-          <div class="card-label">出勤</div>
+          <div class="card-head">
+            <div class="card-label">出勤</div>
+            <div class="card-date" id="checkin-date">${toDateInputValue(new Date())}</div>
+          </div>
           <div class="time-val" id="checkin-time">--:--</div>
+          <div class="fix-row" style="margin-bottom: 0.75rem;">
+            <select id="checkin-kind" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff;">
+              <option value="日勤">日勤</option>
+              <option value="夜勤">夜勤</option>
+              <option value="病欠">病欠</option>
+              <option value="有給">有給</option>
+              <option value="午前休">午前休</option>
+              <option value="午後休">午後休</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
           <button class="btn btn-checkin" id="btn-checkin" data-kind="checkin">出勤する</button>
         </div>
         <div class="card">
-          <div class="card-label">退勤</div>
+          <div class="card-head">
+            <div class="card-label">退勤</div>
+            <div class="card-date" id="checkout-date">${toDateInputValue(new Date())}</div>
+          </div>
           <div class="time-val" id="checkout-time">--:--</div>
+          <div class="fix-row" style="margin-bottom: 0.75rem;">
+            <select id="checkout-kind" style="width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff;">
+              <option value="退勤">退勤</option>
+              <option value="早退">早退</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
           <button class="btn btn-checkout" id="btn-checkout" data-kind="checkout">退勤する</button>
           <button class="btn btn-fix" onclick="showFixPanel()">時間を修正する</button>
         </div>
@@ -379,6 +471,17 @@ function renderApp(user) {
         <div class="fix-row">
           <label>日付</label>
           <input type="date" id="fix-date">
+        </div>
+        <div class="fix-row">
+          <label>種別</label>
+          <select id="fix-kind">
+            <option value="checkin">出勤</option>
+            <option value="checkout">退勤</option>
+          </select>
+        </div>
+        <div class="fix-row">
+          <label>理由</label>
+          <select id="fix-reason"></select>
         </div>
         <div class="fix-row">
           <label>出勤時間</label>
@@ -407,20 +510,39 @@ function renderApp(user) {
 
   buildTimeOptions();
 
+  const fixKind = document.getElementById('fix-kind');
+  const fixReason = document.getElementById('fix-reason');
+  if (fixKind && fixReason) {
+    const syncFixReasonOptions = () => {
+      const options = getReasonOptions(fixKind.value);
+      const currentValue = fixReason.value;
+      fixReason.innerHTML = options.map((label) => `<option value="${label}">${label}</option>`).join('');
+      if (options.includes(currentValue)) {
+        fixReason.value = currentValue;
+      } else {
+        fixReason.value = options[0];
+      }
+    };
+    fixKind.addEventListener('change', syncFixReasonOptions);
+    syncFixReasonOptions();
+  }
+
   const main = document.getElementById('main');
   const checkinBtn = document.getElementById('btn-checkin');
   const checkoutBtn = document.getElementById('btn-checkout');
 
   if (checkinBtn) {
     checkinBtn.addEventListener('click', async () => {
-      await stamp('checkin', user.name);
+      const reason = document.getElementById('checkin-kind')?.value || '日勤';
+      await stamp('checkin', user.name, reason);
       refreshAttendancePage();
     });
   }
 
   if (checkoutBtn) {
     checkoutBtn.addEventListener('click', async () => {
-      await stamp('checkout', user.name);
+      const reason = document.getElementById('checkout-kind')?.value || '退勤';
+      await stamp('checkout', user.name, reason);
       refreshAttendancePage();
     });
   }
@@ -440,12 +562,13 @@ async function refreshAttendancePage() {
 
   const totalHours = (records || []).reduce((sum, row) => sum + (Number(row.work_hours) || 0), 0);
   const totalWorkDays = (records || []).filter((row) => Number(row.work_hours) > 0).length;
+  const averageHours = totalWorkDays > 0 ? totalHours / totalWorkDays : 0;
 
   const monthTotal = document.getElementById('monthly-total');
   if (monthTotal) monthTotal.textContent = Number(totalHours || 0).toFixed(1);
 
-  const workDays = document.getElementById('work-days');
-  if (workDays) workDays.textContent = String(totalWorkDays);
+  const avgHours = document.getElementById('avg-hours');
+  if (avgHours) avgHours.textContent = Number(averageHours || 0).toFixed(1);
 
   const loading = document.getElementById('loading');
   if (loading) loading.style.display = 'none';
@@ -480,6 +603,11 @@ async function refreshAttendancePage() {
   const historyPanel = document.getElementById('history-panel');
   if (historyPanel) historyPanel.style.display = 'block';
 
+  const checkinDate = document.getElementById('checkin-date');
+  const checkoutDate = document.getElementById('checkout-date');
+  if (checkinDate) checkinDate.textContent = toDateInputValue(new Date());
+  if (checkoutDate) checkoutDate.textContent = toDateInputValue(new Date());
+
   const fixDate = document.getElementById('fix-date');
   if (fixDate) {
     fixDate.value = toDateInputValue(new Date());
@@ -491,7 +619,7 @@ async function refreshAttendancePage() {
   if (fixCheckout && todayRec && todayRec.check_out) fixCheckout.value = todayRec.check_out;
 }
 
-async function stamp(kind, name) {
+async function stamp(kind, name, reason = '日勤') {
   const now = new Date();
   const date = toDateInputValue(now);
   const time = now.toTimeString().slice(0, 5);
@@ -507,7 +635,7 @@ async function stamp(kind, name) {
       checkin_at: kind === 'checkin' ? now.toISOString() : null,
       checkout_at: kind === 'checkout' ? now.toISOString() : null,
       work_hours: 0,
-      remarks: ''
+      remarks: reason
     };
 
     await sbFetch('kintai', {
@@ -519,14 +647,18 @@ async function stamp(kind, name) {
 
   const nextPayload = {
     ...current,
+    remarks: reason,
     check_in: kind === 'checkin' ? (current.check_in || time) : current.check_in,
     check_out: kind === 'checkout' ? (current.check_out || time) : current.check_out,
     checkin_at: kind === 'checkin' ? (current.checkin_at || now.toISOString()) : current.checkin_at,
     checkout_at: kind === 'checkout' ? (current.checkout_at || now.toISOString()) : current.checkout_at,
-    work_hours: calcWorkHours(
-      kind === 'checkin' ? (current.checkin_at || now.toISOString()) : current.checkin_at,
-      kind === 'checkout' ? (current.checkout_at || now.toISOString()) : now.toISOString()
-    )
+    work_hours: kind === 'checkout'
+      ? resolveReasonWorkHours(
+          reason,
+          current.checkin_at || current.check_in,
+          kind === 'checkout' ? (current.checkout_at || now.toISOString()) : now.toISOString()
+        )
+      : current.work_hours || 0
   };
 
   await sbFetch(`kintai?id=eq.${current.id}`, {
@@ -537,7 +669,8 @@ async function stamp(kind, name) {
       check_out: nextPayload.check_out,
       checkin_at: nextPayload.checkin_at,
       checkout_at: nextPayload.checkout_at,
-      work_hours: nextPayload.work_hours
+      work_hours: nextPayload.work_hours,
+      remarks: nextPayload.remarks
     })
   });
 }
