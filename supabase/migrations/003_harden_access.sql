@@ -39,9 +39,9 @@ begin
   select u.id into v_id from public.users u where u.name = p_name limit 1;
 
   if v_id is null then
-    insert into public.users(name, token, device_id)
+    insert into public.users as u (name, token, device_id)
     values (p_name, p_token, p_device_id)
-    returning id into v_id;
+    returning u.id into v_id;
   else
     update public.users u
     set device_id = coalesce(u.device_id, p_device_id)
