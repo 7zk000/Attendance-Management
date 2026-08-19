@@ -154,14 +154,20 @@ h2 {
   font-size: 1.25rem;
 }
 
-.user-detail-select {
+.user-detail-button {
   min-width: 120px;
   padding: 8px 10px;
-  border: 1px solid var(--line);
+  border: none;
   border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
+  background: var(--primary);
+  color: #fff;
   font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-detail-button:hover {
+  background: var(--primary-dark);
 }
 
 .table-header {

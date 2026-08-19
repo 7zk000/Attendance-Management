@@ -212,18 +212,14 @@ function renderRows(rows) {
         <td>${formatHours(row.avgHours)}</td>
         <td>${formatRemainingHours(row.remainingTo200)}</td>
         <td>
-          <select class="user-detail-select" aria-label="${escapeHtml(row.name)}の勤怠一覧">
-            <option value="">選択</option>
-            <option value="${escapeHtml(row.name)}">一覧を表示</option>
-          </select>
+          <button class="user-detail-button" type="button" aria-label="${escapeHtml(row.name)}の勤怠一覧を表示">一覧を表示</button>
         </td>
       </tr>
     `;
   }).join('');
 
-  tbodyEl.querySelectorAll('.user-detail-select').forEach((select, index) => {
-    select.addEventListener('change', () => {
-      if (!select.value) return;
+  tbodyEl.querySelectorAll('.user-detail-button').forEach((button, index) => {
+    button.addEventListener('click', () => {
       const selectedRow = sorted[index];
       window.location.href = `manage.html?name=${encodeURIComponent(selectedRow.name)}`;
     });
