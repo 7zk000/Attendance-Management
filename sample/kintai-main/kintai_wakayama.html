@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="勤怠 若山">
+<title>勤怠打刻 - 若山直樹</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, sans-serif; background: #f5f5f0; min-height: 100vh; padding: 2rem 1.25rem; }
+.wrap { max-width: 400px; margin: 0 auto; }
+.header { text-align: center; margin-bottom: 1.5rem; }
+.header h1 { font-size: 20px; font-weight: 600; color: #1a1a1a; }
+.header .name { font-size: 15px; color: #666; margin-top: 4px; }
+.header .date { font-size: 14px; color: #888; margin-top: 6px; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+.stat-card { background: #fff; border-radius: 16px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center; }
+.stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 600; color: #1a1a1a; }
+.stat-unit { font-size: 12px; color: #888; margin-left: 2px; }
+.stat-value.green { color: #1D9E75; }
+.stat-value.orange { color: #D85A30; }
+.card { background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.card-label { font-size: 11px; color: #888; margin-bottom: 6px; letter-spacing: 0.05em; }
+.time-val { font-size: 30px; font-weight: 600; color: #1a1a1a; margin-bottom: 1rem; min-height: 38px; }
+.time-val.done { color: #1D9E75; }
+.btn { width: 100%; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.1s, transform 0.1s; }
+.btn:active { opacity: 0.8; transform: scale(0.98); }
+.btn-checkin { background: #1D9E75; color: #fff; }
+.btn-checkout { background: #D85A30; color: #fff; }
+.btn-fix { background: #f0f0eb; color: #444; font-size: 14px; padding: 12px; margin-top: 0.75rem; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.status { margin-top: 1rem; padding: 12px; border-radius: 12px; font-size: 14px; text-align: center; display: none; }
+.status.ok { background: #e1f5ee; color: #0f6e56; }
+.status.error { background: #faece7; color: #993c1d; }
+.status.warn { background: #faeeda; color: #854f0b; }
+.fix-panel { display: none; background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.fix-panel h2 { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 1rem; }
+.fix-row { margin-bottom: 0.75rem; }
+.fix-row label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+.fix-row input, .fix-row select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff; }
+.btn-fix-submit { background: #378ADD; color: #fff; margin-top: 0.5rem; }
+.btn-fix-cancel { background: #f0f0eb; color: #444; margin-top: 0.5rem; }
+.loading { text-align: center; color: #888; font-size: 14px; padding: 1rem 0; }
+.history { background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.history h2 { font-size: 14px; font-weight: 600; color: #1a1a1a; margin-bottom: 0.75rem; }
+.history-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0eb; font-size: 13px; }
+.history-row:last-child { border-bottom: none; }
+.history-date { color: #444; font-weight: 500; width: 90px; }
+.history-time { color: #666; flex: 1; text-align: center; }
+.history-hours { color: #1D9E75; font-weight: 600; width: 45px; text-align: right; }
+.history-empty { color: #aaa; font-size: 13px; text-align: center; padding: 1rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>勤怠打刻</h1>
+    <div class="name">若山直樹</div>
+    <div class="date" id="today"></div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">今月の合計勤務</div>
+      <div><span class="stat-value green" id="monthly-total">--</span><span class="stat-unit">h</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">営業日 <span id="biz-today-index" style="font-size:10px;color:#aaa"></span></div>
+      <div><span class="stat-value" id="biz-total">--</span><span class="stat-unit">日</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">残り営業日</div>
+      <div><span class="stat-value orange" id="biz-remaining">--</span><span class="stat-unit">日</span></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">出勤日数</div>
+      <div><span class="stat-value" id="work-days">--</span><span class="stat-unit">日</span></div>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">読み込み中...</div>
+
+  <div id="main" style="display:none">
+    <div class="card">
+      <div class="card-label">出勤</div>
+      <div class="time-val" id="checkin-time">--:--</div>
+      <button class="btn btn-checkin" id="btn-checkin" onclick="stamp('checkin')">出勤する</button>
+    </div>
+    <div class="card">
+      <div class="card-label">退勤</div>
+      <div class="time-val" id="checkout-time">--:--</div>
+      <button class="btn btn-checkout" id="btn-checkout" onclick="stamp('checkout')">退勤する</button>
+      <button class="btn btn-fix" onclick="showFix()">時間を修正する</button>
+    </div>
+  </div>
+
+  <div class="fix-panel" id="fix-panel">
+    <h2>打刻修正</h2>
+    <div class="fix-row">
+      <label>日付</label>
+      <input type="date" id="fix-date">
+    </div>
+    <div class="fix-row">
+      <label>出勤時間</label>
+      <select id="fix-checkin"></select>
+    </div>
+    <div class="fix-row">
+      <label>退勤時間</label>
+      <select id="fix-checkout"></select>
+    </div>
+    <button class="btn btn-fix-submit" onclick="submitFix()">修正を送信</button>
+    <button class="btn btn-fix-cancel" onclick="hideFix()">キャンセル</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="history" id="history-panel" style="display:none">
+    <h2 id="history-title">今月の勤務履歴</h2>
+    <div id="history-list"></div>
+  </div>
+</div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwSDzy49HUpSlaENhwe4uLuANWQ4wMZ737306Tny7_RtwU8ZQJIaIIcXL2kdMmzg6kc/exec';
+const NAME = '\u82e5\u5c71\u76f4\u6a39';
+
+function getToday() {
+  const now = new Date();
+  const days = ['\u65e5','\u6708','\u706b','\u6c34','\u6728','\u91d1','\u571f'];
+  return now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' (' + days[now.getDay()] + ')';
+}
+function getTodayValue() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+}
+function getMonthLabel() {
+  return (new Date().getMonth() + 1) + '\u6708\u306e\u52e4\u52d9\u5c65\u6b74';
+}
+document.getElementById('today').textContent = getToday();
+
+function buildTimeOptions(id) {
+  const sel = document.getElementById(id);
+  for (let h = 0; h < 24; h++) {
+    for (let m of [0, 30]) {
+      const val = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = val;
+      sel.appendChild(opt);
+    }
+  }
+}
+buildTimeOptions('fix-checkin');
+buildTimeOptions('fix-checkout');
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+let cbCount = 0;
+function callGAS(params) {
+  return new Promise((resolve) => {
+    const cbName = '_cb' + (cbCount++);
+    window[cbName] = function(data) {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+    const script = document.createElement('script');
+    script.src = GAS_URL + '?' + params + '&name=' + encodeURIComponent(NAME) + '&callback=' + cbName;
+    script.onerror = function() { resolve({ status: 'error' }); };
+    document.head.appendChild(script);
+    setTimeout(() => { resolve({ status: 'timeout' }); }, 10000);
+  });
+}
+
+function renderMonthly(m) {
+  if (m.total !== undefined) document.getElementById('monthly-total').textContent = m.total;
+  if (m.bizTotal !== undefined) document.getElementById('biz-total').textContent = m.bizTotal;
+  if (m.bizRemaining !== undefined) document.getElementById('biz-remaining').textContent = m.bizRemaining;
+  if (m.bizTodayIndex !== undefined && m.bizTodayIndex > 0) {
+    document.getElementById('biz-today-index').textContent = '(' + m.bizTodayIndex + '\u65e5\u76ee)';
+  }
+  if (m.history !== undefined) {
+    const worked = m.history.filter(r => r.hours > 0).length;
+    document.getElementById('work-days').textContent = worked;
+    renderHistory(m.history);
+  }
+}
+
+function renderHistory(history) {
+  const panel = document.getElementById('history-panel');
+  const list = document.getElementById('history-list');
+  document.getElementById('history-title').textContent = getMonthLabel();
+  if (!history || history.length === 0) {
+    list.innerHTML = '<div class="history-empty">\u307e\u3060\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u305b\u3093</div>';
+  } else {
+    list.innerHTML = history.map(r =>
+      '<div class="history-row">' +
+      '<div class="history-date">' + r.date + '</div>' +
+      '<div class="history-time">' + r.checkin + ' \u2192 ' + r.checkout + '</div>' +
+      '<div class="history-hours">' + r.hours + 'h</div>' +
+      '</div>'
+    ).join('');
+  }
+  panel.style.display = 'block';
+}
+
+async function loadStatus() {
+  try {
+    const [s, m] = await Promise.all([callGAS('type=status'), callGAS('type=monthly')]);
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+    if (s.checkin) {
+      document.getElementById('checkin-time').textContent = s.checkin;
+      document.getElementById('checkin-time').classList.add('done');
+      document.getElementById('btn-checkin').disabled = true;
+    }
+    if (s.checkout) {
+      document.getElementById('checkout-time').textContent = s.checkout;
+      document.getElementById('checkout-time').classList.add('done');
+      document.getElementById('btn-checkout').disabled = true;
+    }
+    renderMonthly(m);
+  } catch(e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+  }
+}
+
+async function stamp(type) {
+  document.getElementById('btn-checkin').disabled = true;
+  document.getElementById('btn-checkout').disabled = true;
+  const data = await callGAS('type=' + type);
+  if (data.status === 'already_checkedin') {
+    showStatus('\u4eca\u65e5\u306f\u3059\u3067\u306b\u51fa\u52e4\u6e08\u307f\u3067\u3059', 'warn');
+    document.getElementById('btn-checkin').disabled = true;
+    document.getElementById('btn-checkout').disabled = false;
+    return;
+  }
+  if (data.status === 'no_checkin') {
+    showStatus('\u51fa\u52e4\u8a18\u9332\u304c\u3042\u308a\u307e\u305b\u3093\u3002\u5148\u306b\u51fa\u52e4\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044', 'error');
+    document.getElementById('btn-checkin').disabled = false;
+    document.getElementById('btn-checkout').disabled = false;
+    return;
+  }
+  if (data.status === 'ok') {
+    if (type === 'checkin') {
+      document.getElementById('checkin-time').textContent = data.time;
+      document.getElementById('checkin-time').classList.add('done');
+      document.getElementById('btn-checkin').disabled = true;
+      document.getElementById('btn-checkout').disabled = false;
+      showStatus('\u51fa\u52e4\u3092\u8a18\u9332\u3057\u307e\u3057\u305f (' + data.time + ')', 'ok');
+    } else {
+      document.getElementById('checkout-time').textContent = data.time;
+      document.getElementById('checkout-time').classList.add('done');
+      document.getElementById('btn-checkout').disabled = true;
+      showStatus('\u9000\u52e4\u3092\u8a18\u9332\u3057\u307e\u3057\u305f (' + data.time + ')', 'ok');
+    }
+    const m = await callGAS('type=monthly');
+    renderMonthly(m);
+  }
+}
+
+function showFix() {
+  document.getElementById('fix-date').value = getTodayValue();
+  const now = new Date();
+  const defaultTime = String(now.getHours()).padStart(2,'0') + ':' + (now.getMinutes() < 30 ? '00' : '30');
+  document.getElementById('fix-checkin').value = defaultTime;
+  document.getElementById('fix-checkout').value = defaultTime;
+  document.getElementById('fix-panel').style.display = 'block';
+}
+function hideFix() { document.getElementById('fix-panel').style.display = 'none'; }
+
+async function submitFix() {
+  const date = document.getElementById('fix-date').value;
+  const checkin = document.getElementById('fix-checkin').value;
+  const checkout = document.getElementById('fix-checkout').value;
+  if (!date || !checkin || !checkout) {
+    showStatus('\u65e5\u4ed8\u30fb\u51fa\u52e4\u30fb\u9000\u52e4\u6642\u9593\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044', 'error');
+    return;
+  }
+  await callGAS('type=fix&date=' + encodeURIComponent(date.replace(/-/g,'/')) + '&checkin=' + encodeURIComponent(checkin) + '&checkout=' + encodeURIComponent(checkout));
+  showStatus('\u4fee\u6b63\u3057\u307e\u3057\u305f', 'ok');
+  hideFix();
+  loadStatus();
+}
+
+loadStatus();
+</script>
+</body>
+</html>

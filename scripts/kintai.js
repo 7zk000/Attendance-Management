@@ -91,10 +91,24 @@ async function sbFetch(path, options = {}) {
 
 function calcWorkHours(checkin, checkout) {
   if (!checkin || !checkout) return 0;
-  const start = new Date(checkin);
-  const end = new Date(checkout);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
-  const diffHours = (end - start) / (1000 * 60 * 60);
+
+  const parseValue = (value) => {
+    if (!value) return null;
+    if (value.includes(':') && value.split(':').length === 2) {
+      const [hours, minutes] = value.split(':').map(Number);
+      const base = new Date();
+      base.setHours(hours, minutes, 0, 0);
+      return base;
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const start = parseValue(checkin);
+  const end = parseValue(checkout);
+  if (!start || !end) return 0;
+
+  const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
   return Math.max(0, diffHours);
 }
 
@@ -172,87 +186,299 @@ async function getMonthRecords(name) {
   return rows || [];
 }
 
-function renderHistory(rows) {
-  if (!rows.length) {
-    return `
-      <tr>
-        <td colspan="4" class="empty">今月の記録はまだありません。</td>
-      </tr>
-    `;
+function formatHistoryDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function getTodayLabel() {
+  const now = new Date();
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  return `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} (${days[now.getDay()]})`;
+}
+
+function getMonthLabel() {
+  const now = new Date();
+  return `${now.getMonth() + 1}月の勤務履歴`;
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = `status ${type}`;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function buildTimeOptions() {
+  const selIds = ['fix-checkin', 'fix-checkout'];
+  selIds.forEach((id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '';
+    for (let h = 0; h < 24; h++) {
+      for (const m of [0, 30]) {
+        const val = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        sel.appendChild(opt);
+      }
+    }
+  });
+}
+
+function showFixPanel() {
+  const panel = document.getElementById('fix-panel');
+  if (!panel) return;
+  panel.style.display = 'block';
+}
+
+function hideFixPanel() {
+  const panel = document.getElementById('fix-panel');
+  if (!panel) return;
+  panel.style.display = 'none';
+}
+
+function calcBusinessDays() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  let total = 0;
+  let remaining = 0;
+  let todayIndex = 0;
+
+  for (let day = 1; day <= totalDays; day++) {
+    const date = new Date(year, month, day);
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    if (isWeekend) continue;
+    total += 1;
+    if (day === now.getDate()) todayIndex = total;
+    if (day >= now.getDate()) remaining += 1;
   }
 
-  return rows.map((row) => `
-    <tr>
-      <td>${escapeHtml(formatYmd(row.date))}</td>
-      <td>${escapeHtml(row.check_in || '-')}</td>
-      <td>${escapeHtml(row.check_out || '-')}</td>
-      <td>${escapeHtml((Number(row.work_hours) || 0).toFixed(1) + 'h')}</td>
-    </tr>
-  `).join('');
+  return { total, remaining, todayIndex };
+}
+
+function renderHistory(rows) {
+  const list = document.getElementById('history-list');
+  if (!list) return;
+
+  if (!rows || rows.length === 0) {
+    list.innerHTML = '<div class="history-empty">まだデータがありません</div>';
+    return;
+  }
+
+  const days = ['日', '月', '火', '水', '木', '金', '土'];
+  list.innerHTML = rows.map((row) => {
+    const date = new Date(row.date);
+    const dayName = days[date.getDay()];
+    const dateText = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}(${dayName})`;
+    return `
+      <div class="history-row">
+        <div class="history-date">${dateText}</div>
+        <div class="history-time">${escapeHtml(row.check_in || '--:--')} → ${escapeHtml(row.check_out || '--:--')}</div>
+        <div class="history-hours">${(Number(row.work_hours) || 0).toFixed(1)}h</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function submitFix() {
+  const date = document.getElementById('fix-date').value;
+  const checkin = document.getElementById('fix-checkin').value;
+  const checkout = document.getElementById('fix-checkout').value;
+
+  if (!date || !checkin || !checkout) {
+    showStatus('日付・出勤・退勤時間を入力してください', 'error');
+    return;
+  }
+
+  const target = await sbFetch(`kintai?name=eq.${encodeURIComponent(userNameForRender)}&date=eq.${encodeURIComponent(date)}&select=id`);
+  if (!target || !target.length) {
+    showStatus('修正対象の日付のデータが見つかりません', 'error');
+    return;
+  }
+
+  const workHours = calcWorkHours(checkin, checkout);
+  await sbFetch(`kintai?id=eq.${target[0].id}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      check_in: checkin,
+      check_out: checkout,
+      work_hours: workHours
+    })
+  });
+
+  showStatus('修正しました', 'ok');
+  hideFixPanel();
+  if (typeof refreshAttendancePage === 'function') refreshAttendancePage();
+  else location.reload();
 }
 
 function renderApp(user) {
-  const monthRecords = getMonthRecords(user.name);
-  const todayRecord = getTodayRecord(user.name);
+  const businessDays = calcBusinessDays();
+  userNameForRender = user.name;
 
-  Promise.all([monthRecords, todayRecord]).then(([records, todayRec]) => {
-    const totalHours = (records || []).reduce((sum, row) => sum + (Number(row.work_hours) || 0), 0);
-    const monthLabel = `${new Date().getFullYear()}年${new Date().getMonth() + 1}月`;
+  appEl.innerHTML = `
+    <div class="wrap">
+      <div class="header">
+        <h1>勤怠打刻</h1>
+        <div class="name">${escapeHtml(user.name)}</div>
+        <div class="date">${getTodayLabel()}</div>
+      </div>
 
-    appEl.innerHTML = `
-      <div class="wrap" id="app">
-        <div class="card">
-          <h1>勤怠打刻</h1>
-          <p class="user-name">${escapeHtml(user.name)} さん</p>
-
-          <div class="summary-box">
-            <div>
-              <span>今月合計</span>
-              <strong>${(Number(totalHours) || 0).toFixed(1)}h</strong>
-            </div>
-          </div>
-
-          <div class="today-box">
-            <div>今日の記録</div>
-            <div>${todayRec ? `入室 ${escapeHtml(todayRec.check_in || '-')} / 退室 ${escapeHtml(todayRec.check_out || '-')} / ${escapeHtml((Number(todayRec.work_hours) || 0).toFixed(1))}h` : 'まだ未登録です'}</div>
-          </div>
-
-          <div class="action-group">
-            <button class="btn" data-kind="checkin">出勤</button>
-            <button class="btn" data-kind="checkout">退勤</button>
-          </div>
-
-          <div class="history-box">
-            <h2>${escapeHtml(monthLabel)} の履歴</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>日付</th>
-                  <th>出勤</th>
-                  <th>退勤</th>
-                  <th>時間</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${renderHistory(records || [])}
-              </tbody>
-            </table>
-          </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">今月の合計勤務</div>
+          <div><span class="stat-value green" id="monthly-total">--</span><span class="stat-unit">h</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">営業日 <span id="biz-today-index" style="font-size:10px;color:#aaa">(${businessDays.todayIndex}日目)</span></div>
+          <div><span class="stat-value" id="biz-total">${businessDays.total}</span><span class="stat-unit">日</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">残り営業日</div>
+          <div><span class="stat-value orange" id="biz-remaining">${businessDays.remaining}</span><span class="stat-unit">日</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">出勤日数</div>
+          <div><span class="stat-value" id="work-days">--</span><span class="stat-unit">日</span></div>
         </div>
       </div>
-    `;
 
-    appEl.querySelectorAll('[data-kind]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const kind = button.dataset.kind;
-        await stamp(kind, user.name);
-        location.reload();
-      });
+      <div id="loading" class="loading">読み込み中...</div>
+
+      <div id="main" style="display:none">
+        <div class="card">
+          <div class="card-label">出勤</div>
+          <div class="time-val" id="checkin-time">--:--</div>
+          <button class="btn btn-checkin" id="btn-checkin" data-kind="checkin">出勤する</button>
+        </div>
+        <div class="card">
+          <div class="card-label">退勤</div>
+          <div class="time-val" id="checkout-time">--:--</div>
+          <button class="btn btn-checkout" id="btn-checkout" data-kind="checkout">退勤する</button>
+          <button class="btn btn-fix" onclick="showFixPanel()">時間を修正する</button>
+        </div>
+      </div>
+
+      <div class="fix-panel" id="fix-panel">
+        <h2>打刻修正</h2>
+        <div class="fix-row">
+          <label>日付</label>
+          <input type="date" id="fix-date">
+        </div>
+        <div class="fix-row">
+          <label>出勤時間</label>
+          <select id="fix-checkin"></select>
+        </div>
+        <div class="fix-row">
+          <label>退勤時間</label>
+          <select id="fix-checkout"></select>
+        </div>
+        <button class="btn btn-fix-submit" onclick="submitFix()">修正を送信</button>
+        <button class="btn btn-fix-cancel" onclick="hideFixPanel()">キャンセル</button>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="history" id="history-panel" style="display:none">
+        <h2 id="history-title">${getMonthLabel()}</h2>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  `;
+
+  buildTimeOptions();
+
+  const main = document.getElementById('main');
+  const checkinBtn = document.getElementById('btn-checkin');
+  const checkoutBtn = document.getElementById('btn-checkout');
+
+  if (checkinBtn) {
+    checkinBtn.addEventListener('click', async () => {
+      await stamp('checkin', user.name);
+      refreshAttendancePage();
     });
-  }).catch((error) => {
-    console.error(error);
-    renderEmptyState('勤怠データの取得に失敗しました。');
-  });
+  }
+
+  if (checkoutBtn) {
+    checkoutBtn.addEventListener('click', async () => {
+      await stamp('checkout', user.name);
+      refreshAttendancePage();
+    });
+  }
+
+  refreshAttendancePage();
+}
+
+let userNameForRender = '';
+
+async function refreshAttendancePage() {
+  if (!userNameForRender) return;
+
+  const [records, todayRec] = await Promise.all([
+    getMonthRecords(userNameForRender),
+    getTodayRecord(userNameForRender)
+  ]);
+
+  const totalHours = (records || []).reduce((sum, row) => sum + (Number(row.work_hours) || 0), 0);
+  const totalWorkDays = (records || []).filter((row) => Number(row.work_hours) > 0).length;
+
+  const monthTotal = document.getElementById('monthly-total');
+  if (monthTotal) monthTotal.textContent = Number(totalHours || 0).toFixed(1);
+
+  const workDays = document.getElementById('work-days');
+  if (workDays) workDays.textContent = String(totalWorkDays);
+
+  const loading = document.getElementById('loading');
+  if (loading) loading.style.display = 'none';
+
+  const main = document.getElementById('main');
+  if (main) main.style.display = 'block';
+
+  const checkinNode = document.getElementById('checkin-time');
+  const checkoutNode = document.getElementById('checkout-time');
+  const checkinBtn = document.getElementById('btn-checkin');
+  const checkoutBtn = document.getElementById('btn-checkout');
+
+  if (todayRec) {
+    if (checkinNode) {
+      checkinNode.textContent = todayRec.check_in || '--:--';
+      if (todayRec.check_in) checkinNode.classList.add('done');
+    }
+    if (checkoutNode) {
+      checkoutNode.textContent = todayRec.check_out || '--:--';
+      if (todayRec.check_out) checkoutNode.classList.add('done');
+    }
+    if (checkinBtn) checkinBtn.disabled = Boolean(todayRec.check_in);
+    if (checkoutBtn) checkoutBtn.disabled = Boolean(todayRec.check_out);
+  } else {
+    if (checkinNode) checkinNode.textContent = '--:--';
+    if (checkoutNode) checkoutNode.textContent = '--:--';
+    if (checkinBtn) checkinBtn.disabled = false;
+    if (checkoutBtn) checkoutBtn.disabled = false;
+  }
+
+  renderHistory(records || []);
+  const historyPanel = document.getElementById('history-panel');
+  if (historyPanel) historyPanel.style.display = 'block';
+
+  const fixDate = document.getElementById('fix-date');
+  if (fixDate) {
+    fixDate.value = toDateInputValue(new Date());
+  }
+
+  const fixCheckin = document.getElementById('fix-checkin');
+  const fixCheckout = document.getElementById('fix-checkout');
+  if (fixCheckin && todayRec && todayRec.check_in) fixCheckin.value = todayRec.check_in;
+  if (fixCheckout && todayRec && todayRec.check_out) fixCheckout.value = todayRec.check_out;
 }
 
 async function stamp(kind, name) {

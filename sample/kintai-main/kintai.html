@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="勤怠">
+<title>勤怠打刻</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, sans-serif; background: #f5f5f0; min-height: 100vh; padding: 2rem 1.25rem; }
+.wrap { max-width: 400px; margin: 0 auto; }
+.header { text-align: center; margin-bottom: 1.5rem; }
+.header h1 { font-size: 20px; font-weight: 600; color: #1a1a1a; }
+.header .name { font-size: 15px; color: #666; margin-top: 4px; }
+.header .date { font-size: 14px; color: #888; margin-top: 6px; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+.stat-card { background: #fff; border-radius: 16px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); text-align: center; }
+.stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 600; color: #1a1a1a; }
+.stat-unit { font-size: 12px; color: #888; margin-left: 2px; }
+.stat-value.green { color: #1D9E75; }
+.stat-value.orange { color: #D85A30; }
+.card { background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.card-label { font-size: 11px; color: #888; margin-bottom: 6px; }
+.time-val { font-size: 30px; font-weight: 600; color: #1a1a1a; margin-bottom: 1rem; min-height: 38px; }
+.time-val.done { color: #1D9E75; }
+.btn { width: 100%; padding: 15px; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.1s; }
+.btn:active { opacity: 0.8; }
+.btn-checkin { background: #1D9E75; color: #fff; }
+.btn-checkout { background: #D85A30; color: #fff; }
+.btn-fix { background: #f0f0eb; color: #444; font-size: 14px; padding: 12px; margin-top: 0.75rem; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.status { margin-top: 1rem; padding: 12px; border-radius: 12px; font-size: 14px; text-align: center; display: none; }
+.status.ok { background: #e1f5ee; color: #0f6e56; }
+.status.error { background: #faece7; color: #993c1d; }
+.status.warn { background: #faeeda; color: #854f0b; }
+.fix-panel { display: none; background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.fix-panel h2 { font-size: 15px; font-weight: 600; margin-bottom: 1rem; }
+.fix-row { margin-bottom: 0.75rem; }
+.fix-row label { font-size: 12px; color: #888; display: block; margin-bottom: 4px; }
+.fix-row input, .fix-row select { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px; font-size: 15px; background: #fff; }
+.btn-fix-submit { background: #378ADD; color: #fff; margin-top: 0.5rem; }
+.btn-fix-cancel { background: #f0f0eb; color: #444; margin-top: 0.5rem; }
+.loading { text-align: center; color: #888; font-size: 14px; padding: 1rem 0; }
+.history { background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.history h2 { font-size: 14px; font-weight: 600; margin-bottom: 0.75rem; }
+.history-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0eb; font-size: 13px; }
+.history-row:last-child { border-bottom: none; }
+.history-date { color: #444; font-weight: 500; width: 90px; }
+.history-time { color: #666; flex: 1; text-align: center; }
+.history-hours { color: #1D9E75; font-weight: 600; width: 45px; text-align: right; }
+.history-empty { color: #aaa; font-size: 13px; text-align: center; padding: 1rem 0; }
+.error-screen { text-align: center; padding: 4rem 1rem; }
+.error-screen h2 { font-size: 18px; color: #1a1a1a; margin-bottom: 8px; }
+.error-screen p { font-size: 14px; color: #888; margin-bottom: 1.5rem; }
+.error-screen a { color: #1D9E75; text-decoration: none; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="loading">読み込み中...</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://orkwjindnxjkaplsbcdb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_selWw3fEQWrExooHJZTt_w_7OKkA3hQ';
+const REGISTER_URL = 'https://naokstarider2624114-art.github.io/kintai/kintai_register.html';
+
+let NAME = '';
+let TOKEN = '';
+
+function getToday() {
+  const now = new Date();
+  const days = ['\u65e5','\u6708','\u706b','\u6c34','\u6728','\u91d1','\u571f'];
+  return now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' (' + days[now.getDay()] + ')';
+}
+function getTodayStr() {
+  const now = new Date();
+  return now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0');
+}
+function getTodayValue() {
+  const now = new Date();
+  return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+}
+function getYearMonth() {
+  const now = new Date();
+  return now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0');
+}
+function roundDown30(h, m) {
+  return String(h).padStart(2,'0') + ':' + String(Math.floor(m/30)*30).padStart(2,'0');
+}
+function getNowRounded() {
+  const now = new Date();
+  return roundDown30(now.getHours(), now.getMinutes());
+}
+function calcWorkHours(checkin, checkout) {
+  const ci = checkin.split(':');
+  const co = checkout.split(':');
+  let ciMins = parseInt(ci[0])*60 + parseInt(ci[1]);
+  let coMins = parseInt(co[0])*60 + parseInt(co[1]);
+  if (coMins <= ciMins) coMins += 1440;
+  const diff = coMins - ciMins;
+  const breakMins = diff > 480 ? 60 : 0;
+  const work = Math.floor((diff - breakMins) / 30) * 30;
+  return Math.round(work / 60 * 100) / 100;
+}
+function calcBusinessDays() {
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth(), today = now.getDate();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let total = 0, remaining = 0, todayIndex = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month, d).getDay();
+    if (dow === 0 || dow === 6) continue;
+    total++;
+    if (d === today) todayIndex = total;
+    if (d >= today) remaining++;
+  }
+  return { total, remaining, todayIndex };
+}
+
+async function sbFetch(path, options = {}) {
+  const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, {
+    ...options,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      ...options.headers
+    }
+  });
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function getTodayRecord() {
+  const data = await sbFetch(`kintai?name=eq.${encodeURIComponent(NAME)}&date=eq.${encodeURIComponent(getTodayStr())}&select=*`);
+  return data && data.length > 0 ? data[0] : null;
+}
+async function getMonthRecords() {
+  const ym = getYearMonth();
+  const data = await sbFetch(`kintai?name=eq.${encodeURIComponent(NAME)}&date=like.${encodeURIComponent(ym + '%')}&select=*&order=date.asc`);
+  return data || [];
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function renderMonthly(records) {
+  const total = records.reduce((s, r) => s + (Number(r.work_hours) || 0), 0);
+  document.getElementById('monthly-total').textContent = Math.round(total * 100) / 100;
+  document.getElementById('work-days').textContent = records.filter(r => Number(r.work_hours) > 0).length;
+  const days = ['\u65e5','\u6708','\u706b','\u6c34','\u6728','\u91d1','\u571f'];
+  const list = document.getElementById('history-list');
+  if (records.length === 0) {
+    list.innerHTML = '<div class="history-empty">\u307e\u3060\u30c7\u30fc\u30bf\u304c\u3042\u308a\u307e\u305b\u3093</div>';
+  } else {
+    list.innerHTML = records.map(r => {
+      const d = new Date(r.date.replace(/\//g, '-'));
+      return '<div class="history-row">' +
+        '<div class="history-date">' + r.date.slice(5) + '(' + days[d.getDay()] + ')</div>' +
+        '<div class="history-time">' + r.checkin + ' \u2192 ' + (r.checkout || '--:--') + '</div>' +
+        '<div class="history-hours">' + (Number(r.work_hours) || 0) + 'h</div></div>';
+    }).join('');
+  }
+  document.getElementById('history-panel').style.display = 'block';
+}
+
+function showMain() {
+  const biz = calcBusinessDays();
+  document.getElementById('app').innerHTML = `
+    <div class="header">
+      <h1>\u52e4\u6020\u6253\u523b</h1>
+      <div class="name">${NAME}</div>
+      <div class="date">${getToday()}</div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">\u4eca\u6708\u306e\u5408\u8a08\u52e4\u52d9</div><div><span class="stat-value green" id="monthly-total">--</span><span class="stat-unit">h</span></div></div>
+      <div class="stat-card"><div class="stat-label">\u55b6\u696d\u65e5 <span id="biz-idx" style="font-size:10px;color:#aaa">(${biz.todayIndex}\u65e5\u76ee)</span></div><div><span class="stat-value">${biz.total}</span><span class="stat-unit">\u65e5</span></div></div>
+      <div class="stat-card"><div class="stat-label">\u6b8b\u308a\u55b6\u696d\u65e5</div><div><span class="stat-value orange">${biz.remaining}</span><span class="stat-unit">\u65e5</span></div></div>
+      <div class="stat-card"><div class="stat-label">\u51fa\u52e4\u65e5\u6570</div><div><span class="stat-value" id="work-days">--</span><span class="stat-unit">\u65e5</span></div></div>
+    </div>
+    <div id="loading-data" class="loading">\u8aad\u307f\u8fbc\u307f\u4e2d...</div>
+    <div id="main" style="display:none">
+      <div class="card">
+        <div class="card-label">\u51fa\u52e4</div>
+        <div class="time-val" id="checkin-time">--:--</div>
+        <button class="btn btn-checkin" id="btn-checkin" onclick="stamp('checkin')">\u51fa\u52e4\u3059\u308b</button>
+      </div>
+      <div class="card">
+        <div class="card-label">\u9000\u52e4</div>
+        <div class="time-val" id="checkout-time">--:--</div>
+        <button class="btn btn-checkout" id="btn-checkout" onclick="stamp('checkout')">\u9000\u52e4\u3059\u308b</button>
+        <button class="btn btn-fix" onclick="showFix()">\u6642\u9593\u3092\u4fee\u6b63\u3059\u308b</button>
+      </div>
+    </div>
+    <div class="fix-panel" id="fix-panel">
+      <h2>\u6253\u523b\u4fee\u6b63</h2>
+      <div class="fix-row"><label>\u65e5\u4ed8</label><input type="date" id="fix-date"></div>
+      <div class="fix-row"><label>\u51fa\u52e4\u6642\u9593</label><select id="fix-checkin"></select></div>
+      <div class="fix-row"><label>\u9000\u52e4\u6642\u9593</label><select id="fix-checkout"></select></div>
+      <button class="btn btn-fix-submit" onclick="submitFix()">\u4fee\u6b63\u3092\u9001\u4fe1</button>
+      <button class="btn btn-fix-cancel" onclick="hideFix()">\u30ad\u30e3\u30f3\u30bb\u30eb</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="history" id="history-panel" style="display:none">
+      <h2>\u4eca\u6708\u306e\u52e4\u52d9\u5c65\u6b74</h2>
+      <div id="history-list"></div>
+    </div>
+  `;
+
+  ['fix-checkin','fix-checkout'].forEach(id => {
+    const sel = document.getElementById(id);
+    for (let h = 0; h < 24; h++) {
+      for (let m of [0, 30]) {
+        const val = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+        const opt = document.createElement('option');
+        opt.value = val; opt.textContent = val;
+        sel.appendChild(opt);
+      }
+    }
+  });
+
+  loadData();
+}
+
+function showError() {
+  document.getElementById('app').innerHTML = `
+    <div class="error-screen">
+      <h2>\u30ea\u30f3\u30af\u304c\u7121\u52b9\u3067\u3059</h2>
+      <p>\u767b\u9332\u30da\u30fc\u30b8\u304b\u3089\u518d\u767b\u9332\u3057\u3066\u304f\u3060\u3055\u3044\u3002</p>
+      <a href="${REGISTER_URL}">\u767b\u9332\u30da\u30fc\u30b8\u3078</a>
+    </div>
+  `;
+}
+
+async function loadData() {
+  try {
+    const [record, records] = await Promise.all([getTodayRecord(), getMonthRecords()]);
+    document.getElementById('loading-data').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+    if (record && record.checkin) {
+      document.getElementById('checkin-time').textContent = record.checkin;
+      document.getElementById('checkin-time').classList.add('done');
+      document.getElementById('btn-checkin').disabled = true;
+    }
+    if (record && record.checkout) {
+      document.getElementById('checkout-time').textContent = record.checkout;
+      document.getElementById('checkout-time').classList.add('done');
+      document.getElementById('btn-checkout').disabled = true;
+    }
+    renderMonthly(records);
+  } catch(e) {
+    document.getElementById('loading-data').style.display = 'none';
+    document.getElementById('main').style.display = 'block';
+  }
+}
+
+async function stamp(type) {
+  document.getElementById('btn-checkin').disabled = true;
+  document.getElementById('btn-checkout').disabled = true;
+  try {
+    const record = await getTodayRecord();
+    if (type === 'checkin') {
+      if (record) {
+        showStatus('\u4eca\u65e5\u306f\u3059\u3067\u306b\u51fa\u52e4\u6e08\u307f\u3067\u3059', 'warn');
+        document.getElementById('btn-checkin').disabled = true;
+        document.getElementById('btn-checkout').disabled = false;
+        return;
+      }
+      const time = getNowRounded();
+      await sbFetch('kintai', { method: 'POST', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ name: NAME, date: getTodayStr(), checkin: time, checkout: '', work_hours: 0 }) });
+      document.getElementById('checkin-time').textContent = time;
+      document.getElementById('checkin-time').classList.add('done');
+      document.getElementById('btn-checkin').disabled = true;
+      document.getElementById('btn-checkout').disabled = false;
+      showStatus('\u51fa\u52e4\u3092\u8a18\u9332\u3057\u307e\u3057\u305f (' + time + ')', 'ok');
+    } else {
+      if (!record || !record.checkin) {
+        showStatus('\u51fa\u52e4\u8a18\u9332\u304c\u3042\u308a\u307e\u305b\u3093\u3002\u5148\u306b\u51fa\u52e4\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044', 'error');
+        document.getElementById('btn-checkin').disabled = false;
+        document.getElementById('btn-checkout').disabled = false;
+        return;
+      }
+      const time = getNowRounded();
+      const work_hours = calcWorkHours(record.checkin, time);
+      await sbFetch(`kintai?id=eq.${record.id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ checkout: time, work_hours }) });
+      document.getElementById('checkout-time').textContent = time;
+      document.getElementById('checkout-time').classList.add('done');
+      document.getElementById('btn-checkout').disabled = true;
+      showStatus('\u9000\u52e4\u3092\u8a18\u9332\u3057\u307e\u3057\u305f (' + time + ')', 'ok');
+    }
+    const records = await getMonthRecords();
+    renderMonthly(records);
+  } catch(e) {
+    showStatus('\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f', 'error');
+    document.getElementById('btn-checkin').disabled = false;
+    document.getElementById('btn-checkout').disabled = false;
+  }
+}
+
+function showFix() {
+  document.getElementById('fix-date').value = getTodayValue();
+  const now = new Date();
+  const t = String(now.getHours()).padStart(2,'0') + ':' + (now.getMinutes() < 30 ? '00' : '30');
+  document.getElementById('fix-checkin').value = t;
+  document.getElementById('fix-checkout').value = t;
+  document.getElementById('fix-panel').style.display = 'block';
+}
+function hideFix() { document.getElementById('fix-panel').style.display = 'none'; }
+
+async function submitFix() {
+  const date = document.getElementById('fix-date').value.replace(/-/g, '/');
+  const checkin = document.getElementById('fix-checkin').value;
+  const checkout = document.getElementById('fix-checkout').value;
+  if (!date || !checkin || !checkout) { showStatus('\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044', 'error'); return; }
+  const work_hours = calcWorkHours(checkin, checkout);
+  const existing = await sbFetch(`kintai?name=eq.${encodeURIComponent(NAME)}&date=eq.${encodeURIComponent(date)}&select=id`);
+  if (existing && existing.length > 0) {
+    await sbFetch(`kintai?id=eq.${existing[0].id}`, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ checkin, checkout, work_hours }) });
+  } else {
+    await sbFetch('kintai', { method: 'POST', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ name: NAME, date, checkin, checkout, work_hours }) });
+  }
+  showStatus('\u4fee\u6b63\u3057\u307e\u3057\u305f', 'ok');
+  hideFix();
+  loadData();
+}
+
+// 起動: URLのtokenからユーザーを特定
+async function init() {
+  const params = new URLSearchParams(window.location.search);
+  TOKEN = params.get('token');
+  if (!TOKEN) { showError(); return; }
+
+  const data = await sbFetch(`users?token=eq.${encodeURIComponent(TOKEN)}&select=name`);
+  if (!data || data.length === 0) { showError(); return; }
+
+  NAME = data[0].name;
+  showMain();
+}
+
+init();
+</script>
+</body>
+</html>
