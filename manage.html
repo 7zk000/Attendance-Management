@@ -67,9 +67,35 @@
               <th>休みの数</th>
               <th>一日平均の稼働時間</th>
               <th>200hまで残り何時間か</th>
+              <th>勤怠一覧</th>
             </tr>
           </thead>
           <tbody id="summary-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="user-detail" class="card detail-card hidden">
+      <div class="detail-header">
+        <div>
+          <p class="eyebrow">個人勤怠</p>
+          <h2 id="detail-title">-</h2>
+        </div>
+        <button id="back-to-summary-btn" class="btn btn-secondary" type="button">一覧に戻る</button>
+      </div>
+      <div id="detail-loading" class="loading">読み込み中...</div>
+      <div id="detail-table-wrap" class="table-wrap hidden">
+        <table>
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>出勤時刻</th>
+              <th>退勤時刻</th>
+              <th>稼働時間</th>
+              <th>理由</th>
+            </tr>
+          </thead>
+          <tbody id="detail-body"></tbody>
         </table>
       </div>
     </div>
@@ -79,6 +105,6 @@
     window.SUPABASE_URL = 'https://fepmlhggkmdfhcfcyuxi.supabase.co';
     window.SUPABASE_ANON_KEY = 'sb_publishable_ccPWCQ40MjmvRAR4w8SefA_RW3AQ_37';
   </script>
-  <script src="scripts/manage.js"></script>
+  <script src="scripts/manage.js?v=20260819b"></script>
 </body>
 </html>

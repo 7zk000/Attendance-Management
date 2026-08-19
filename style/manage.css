@@ -99,6 +99,12 @@ h2 {
   color: #fff;
 }
 
+.btn-secondary {
+  background: var(--panel-alt);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -130,6 +136,32 @@ h2 {
 
 .table-card {
   padding: 20px;
+}
+
+.detail-card {
+  padding: 20px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.detail-header h2 {
+  font-size: 1.25rem;
+}
+
+.user-detail-select {
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
 }
 
 .table-header {
@@ -200,5 +232,10 @@ tbody tr:hover {
 
   .container {
     padding-top: 20px;
+  }
+
+  .detail-header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

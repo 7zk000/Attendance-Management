@@ -20,6 +20,13 @@ const tableWrapEl = document.getElementById('table-wrap');
 const tbodyEl = document.getElementById('summary-body');
 const reloadBtn = document.getElementById('reload-btn');
 const monthInputEl = document.getElementById('month-input');
+const summaryCardEl = document.querySelector('.table-card');
+const detailEl = document.getElementById('user-detail');
+const detailTitleEl = document.getElementById('detail-title');
+const detailLoadingEl = document.getElementById('detail-loading');
+const detailTableWrapEl = document.getElementById('detail-table-wrap');
+const detailBodyEl = document.getElementById('detail-body');
+const backToSummaryBtn = document.getElementById('back-to-summary-btn');
 
 function isAdminLoggedIn() {
   return sessionStorage.getItem('kintai_admin_logged_in') === 'true';
@@ -45,7 +52,7 @@ function handleLogin() {
     setAdminLoggedIn(true);
     showAdminContent();
     adminLoginError.style.display = 'none';
-    loadUserSummary();
+    loadCurrentView();
     return;
   }
 
@@ -88,6 +95,29 @@ function getCurrentMonthKey() {
 function getCurrentMonthText() {
   const { year, month } = getMonthFromInput();
   return `${year}年${String(month).padStart(2, '0')}月`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getDetailName() {
+  return new URLSearchParams(window.location.search).get('name');
+}
+
+function showSummaryView() {
+  summaryCardEl.classList.remove('hidden');
+  detailEl.classList.add('hidden');
+}
+
+function showDetailView() {
+  summaryCardEl.classList.add('hidden');
+  detailEl.classList.remove('hidden');
 }
 
 function getBusinessDayStats(year, month) {
@@ -162,7 +192,7 @@ function formatRemainingHours(value) {
 
 function renderRows(rows) {
   if (!rows.length) {
-    tbodyEl.innerHTML = '<tr><td colspan="7" class="empty">登録されているユーザーがありません。</td></tr>';
+    tbodyEl.innerHTML = '<tr><td colspan="8" class="empty">登録されているユーザーがありません。</td></tr>';
     return;
   }
 
@@ -181,9 +211,74 @@ function renderRows(rows) {
         <td>${row.restDays}日</td>
         <td>${formatHours(row.avgHours)}</td>
         <td>${formatRemainingHours(row.remainingTo200)}</td>
+        <td>
+          <select class="user-detail-select" aria-label="${escapeHtml(row.name)}の勤怠一覧">
+            <option value="">選択</option>
+            <option value="${escapeHtml(row.name)}">一覧を表示</option>
+          </select>
+        </td>
       </tr>
     `;
   }).join('');
+
+  tbodyEl.querySelectorAll('.user-detail-select').forEach((select, index) => {
+    select.addEventListener('change', () => {
+      if (!select.value) return;
+      const selectedRow = sorted[index];
+      window.location.href = `manage.html?name=${encodeURIComponent(selectedRow.name)}`;
+    });
+  });
+}
+
+function renderDetailRows(records) {
+  if (!records.length) {
+    detailBodyEl.innerHTML = '<tr><td colspan="5" class="empty">この月の勤怠データがありません。</td></tr>';
+    return;
+  }
+
+  detailBodyEl.innerHTML = records.map((record) => `
+    <tr>
+      <td>${escapeHtml(record.date || '-')}</td>
+      <td>${escapeHtml(record.check_in || '--:--')}</td>
+      <td>${escapeHtml(record.check_out || '--:--')}</td>
+      <td>${formatHours(record.work_hours)}</td>
+      <td>${escapeHtml(record.remarks || '-')}</td>
+    </tr>
+  `).join('');
+}
+
+async function loadUserDetail(name) {
+  showDetailView();
+  detailLoadingEl.classList.remove('hidden');
+  detailTableWrapEl.classList.add('hidden');
+  detailTitleEl.textContent = `${name}の勤怠一覧（${getCurrentMonthText()}）`;
+
+  try {
+    const { year, month } = getMonthFromInput();
+    const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+    const nextMonthDate = new Date(year, month, 1);
+    const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+    const records = await sbFetch(
+      `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(monthStart)}&date=lt.${encodeURIComponent(monthEnd)}&select=date,check_in,check_out,work_hours,remarks&order=date.asc`
+    );
+    renderDetailRows(records || []);
+  } catch (error) {
+    detailBodyEl.innerHTML = '<tr><td colspan="5" class="empty">データの取得に失敗しました。</td></tr>';
+    console.error(error);
+  } finally {
+    detailLoadingEl.classList.add('hidden');
+    detailTableWrapEl.classList.remove('hidden');
+  }
+}
+
+function loadCurrentView() {
+  const detailName = getDetailName();
+  if (detailName) {
+    loadUserDetail(detailName);
+  } else {
+    showSummaryView();
+    loadUserSummary();
+  }
 }
 
 async function loadUserSummary() {
@@ -229,7 +324,7 @@ async function loadUserSummary() {
     remainingBusinessDaysEl.textContent = `${businessStats.remaining}日`;
     renderRows(summary);
   } catch (error) {
-    tbodyEl.innerHTML = '<tr><td colspan="7" class="empty">データの取得に失敗しました。</td></tr>';
+    tbodyEl.innerHTML = '<tr><td colspan="8" class="empty">データの取得に失敗しました。</td></tr>';
     console.error(error);
   } finally {
     loadingEl.classList.add('hidden');
@@ -239,6 +334,10 @@ async function loadUserSummary() {
 
 const now = new Date();
 monthInputEl.value = formatMonthInputValue(now);
-monthInputEl.addEventListener('change', loadUserSummary);
-reloadBtn.addEventListener('click', loadUserSummary);
-loadUserSummary();
+monthInputEl.addEventListener('change', loadCurrentView);
+reloadBtn.addEventListener('click', loadCurrentView);
+backToSummaryBtn.addEventListener('click', () => {
+  window.location.href = 'manage.html';
+});
+
+loadCurrentView();
