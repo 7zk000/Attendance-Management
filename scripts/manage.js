@@ -20,6 +20,7 @@ const tableWrapEl = document.getElementById('table-wrap');
 const tbodyEl = document.getElementById('summary-body');
 const reloadBtn = document.getElementById('reload-btn');
 const monthInputEl = document.getElementById('month-input');
+const backToAttendanceBtn = document.getElementById('back-to-attendance-btn');
 const summaryCardEl = document.querySelector('.table-card');
 const detailEl = document.getElementById('user-detail');
 const detailTitleEl = document.getElementById('detail-title');
@@ -332,6 +333,9 @@ const now = new Date();
 monthInputEl.value = formatMonthInputValue(now);
 monthInputEl.addEventListener('change', loadCurrentView);
 reloadBtn.addEventListener('click', loadCurrentView);
+backToAttendanceBtn.addEventListener('click', () => {
+  window.location.href = 'index.html';
+});
 backToSummaryBtn.addEventListener('click', () => {
   window.location.href = 'manage.html?view=summary';
 });
