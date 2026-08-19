@@ -69,7 +69,8 @@ kintai/
 │   └── migrations/               ← Supabase の SQL Editor で順番に実行するマイグレーション
 │       ├── 001_create_attendance_tables.sql
 │       ├── 002_allow_anon_insert_user_devices.sql
-│       └── 003_harden_access.sql
+│       ├── 003_harden_access.sql
+│       └── 004_fix_users_is_admin_column.sql
 └── LICENSE
 ```
 
