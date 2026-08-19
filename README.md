@@ -32,7 +32,7 @@
 
 ### 4. 月末処理(Excel自動転記)
 
-月末に `fill_attendance.py`(Excel自動転記スクリプト、本リポジトリ外で個別管理)を実行すると、Supabase の勤怠データを作業実績報告書(Excel)に自動転記できる。
+月末に `app/fill_attendance.py` を実行すると、Supabase の勤怠データを作業実績報告書(Excel)に自動転記できる。
 
 **初回セットアップ**
 
@@ -71,6 +71,10 @@ kintai/
 │       ├── 002_allow_anon_insert_user_devices.sql
 │       ├── 003_harden_access.sql
 │       └── 004_fix_users_is_admin_column.sql
+├── app/
+│   ├── fill_attendance.py        ← Excel 自動転記スクリプト(月末処理)
+│   ├── 実行する.command          ← Mac 用ランチャー
+│   └── 実行する.bat              ← Windows 用ランチャー
 └── LICENSE
 ```
 
