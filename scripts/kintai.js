@@ -503,6 +503,7 @@ function renderApp(user) {
       </div>
 
       <div style="margin-top: 1rem; text-align: center;">
+        <button type="button" class="btn btn-fix" onclick="exportMonthCsv()">今月の履歴をCSV出力</button>
         <button type="button" class="btn btn-fix" onclick="window.location.href='components/manage.html'">管理用画面へ</button>
       </div>
     </div>
@@ -534,6 +535,7 @@ function renderApp(user) {
 
 let userNameForRender = '';
 let userTokenForRender = '';
+let lastMonthRecords = [];
 
 async function refreshAttendancePage() {
   if (!userNameForRender) return;
@@ -542,6 +544,8 @@ async function refreshAttendancePage() {
     getMonthRecords(userNameForRender),
     getTodayRecord(userNameForRender)
   ]);
+
+  lastMonthRecords = records || [];
 
   const totalHours = (records || []).reduce((sum, row) => sum + (Number(row.work_hours) || 0), 0);
   const totalWorkDays = (records || []).filter((row) => Number(row.work_hours) > 0).length;
@@ -574,6 +578,45 @@ async function refreshAttendancePage() {
   const fixCheckout = document.getElementById('fix-checkout');
   if (fixCheckin && todayRec && todayRec.check_in) fixCheckin.value = todayRec.check_in;
   if (fixCheckout && todayRec && todayRec.check_out) fixCheckout.value = todayRec.check_out;
+}
+
+function csvEscapeCell(value) {
+  const str = String(value ?? '');
+  return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function exportMonthCsv() {
+  if (!lastMonthRecords.length) {
+    showStatus('出力できる履歴がありません', 'error');
+    return;
+  }
+
+  const header = ['日付', '出勤時刻', '退勤時刻', '稼働時間(h)', '理由'];
+  const lines = [header.map(csvEscapeCell).join(',')];
+
+  lastMonthRecords.forEach((row) => {
+    lines.push([
+      formatYmd(row.date),
+      row.check_in || '',
+      row.check_out || '',
+      (Number(row.work_hours) || 0).toFixed(1),
+      row.remarks || ''
+    ].map(csvEscapeCell).join(','));
+  });
+
+  const csvContent = '﻿' + lines.join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `勤怠_${userNameForRender}_${ym}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function stamp(kind, token, reason = '日勤') {
