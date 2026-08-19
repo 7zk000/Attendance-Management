@@ -13,6 +13,21 @@ body { font-family: -apple-system, sans-serif; background: #f5f5f0; min-height: 
 .stat-value.green { color: #1D9E75; }
 .stat-value.orange { color: #D85A30; }
 .card { background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.user-name { text-align: center; font-size: 1.1rem; font-weight: 600; color: #222; margin-bottom: 1rem; }
+.summary-box { background: #f8f8f4; border: 1px solid #eee; border-radius: 14px; padding: 1rem; margin-bottom: 1rem; }
+.summary-box > div { display: flex; justify-content: space-between; align-items: center; }
+.summary-box span { font-size: 12px; color: #666; }
+.summary-box strong { font-size: 1.8rem; color: #1a1a1a; }
+.today-box { background: #fafaf7; border: 1px solid #eee; border-radius: 14px; padding: 0.9rem 1rem; margin-bottom: 1rem; font-size: 0.9rem; color: #444; }
+.today-box > div:first-child { font-size: 0.72rem; color: #888; margin-bottom: 0.45rem; }
+.action-group { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+.action-group .btn { width: 100%; }
+.history-box { background: #fff; border-radius: 16px; padding: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.history-box h2 { font-size: 14px; font-weight: 600; margin-bottom: 0.75rem; }
+.history-box table { width: 100%; border-collapse: collapse; }
+.history-box th, .history-box td { padding: 0.55rem 0.35rem; text-align: left; font-size: 12px; color: #444; border-bottom: 1px solid #f0f0eb; }
+.history-box th { color: #666; font-weight: 600; }
+.history-box .empty { text-align: center; color: #888; padding: 1rem 0; }
 .card-label { font-size: 11px; color: #888; margin-bottom: 6px; }
 .time-val { font-size: 30px; font-weight: 600; color: #1a1a1a; margin-bottom: 1rem; min-height: 38px; }
 .time-val.done { color: #1D9E75; }
