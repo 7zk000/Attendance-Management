@@ -1,9 +1,13 @@
 const env = typeof window !== 'undefined' ? window : {};
-const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_URL || 'https://orkwjindnxjkaplsbcdb.supabase.co';
-const SUPABASE_KEY = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY || 'sb_publishable_selWw3fEQWrExooHJZTt_w_7OKkA3hQ';
+const SUPABASE_URL = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || env.SUPABASE_PROJECT_URL || '';
+const SUPABASE_KEY = env.SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_PUBLIC_KEY || '';
 const BASE_URL = (typeof window !== 'undefined' && window.location && window.location.origin)
   ? `${window.location.origin}/`
   : 'https://attendance-management-two-lyart.vercel.app/';
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('Supabase config missing. Set window.SUPABASE_URL and window.SUPABASE_ANON_KEY before loading this script.');
+}
 
 function getDeviceId() {
   const key = 'kintai_device_id';
