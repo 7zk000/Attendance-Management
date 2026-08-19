@@ -6,7 +6,7 @@
 ## 概要
 
 - 共有の打刻画面は `index.html` を起点に利用する
-- 個別ページのリダイレクトは不要で、共通ページを直接利用する
+- 発行された専用 URL から共通の打刻ページを利用する
 - データは Supabase で管理する
 - `register/kintai_register.html` でユーザーとデバイスを登録する
 - `manage.html` で月次集計を確認できる
@@ -48,10 +48,11 @@ kintai/
 │   ├── kintai.css                ← 打刻画面のスタイル
 │   ├── kintai_register.css       ← 登録ページのスタイル
 │   └── manage.css                ← 管理画面のスタイル
-├── userScripts/
-│   ├── fill_attendance.py         ← Excel 自動転記スクリプト
-│   ├── 実行する.command          ← Mac 用ランチャー
-│   └── 実行する.bat             ← Windows 用ランチャー
+├── sample/
+│   └── kintai-main/
+│       ├── fill_attendance.py     ← Excel 自動転記スクリプト
+│       ├── 実行する.command       ← Mac 用ランチャー
+│       └── 実行する.bat           ← Windows 用ランチャー
 ├── LICENSE
 └── ...
 ```
@@ -61,6 +62,6 @@ kintai/
 ## 補足
 
 - Supabase の接続情報は各環境に合わせて設定する
-- `userScripts/fill_attendance.py` は月末処理用の補助スクリプト
-- 既存の個別ページは共通ページにリダイレクトする構成になっている
+- `sample/kintai-main/fill_attendance.py` は月末処理用の補助スクリプト
+- `sample/kintai-main/` には旧版のサンプル一式を保持している
 

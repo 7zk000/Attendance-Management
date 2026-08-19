@@ -24,8 +24,8 @@ import urllib.parse
 # ============================================================
 # ★ここを自分の情報に書き換えてください★
 # ============================================================
-SUPABASE_URL = "https://orkwjindnxjkaplsbcdb.supabase.co"
-SUPABASE_KEY = "sb_publishable_selWw3fEQWrExooHJZTt_w_7OKkA3hQ"
+SUPABASE_URL = "https://fepmlhggkmdfhcfcyuxi.supabase.co"
+SUPABASE_KEY = "sb_publishable_ccPWCQ40MjmvRAR4w8SefA_RW3AQ_37"
 TARGET_NAME  = "若山直樹"   # ← 自分の名前に変更
 # ============================================================
 
@@ -217,7 +217,7 @@ def parse_time(s: str) -> datetime.time:
 def fetch_sheet_rows(year: int, month: int) -> list:
     """Supabaseから当月の勤怠データを取得する"""
     import urllib.parse
-    ym = f"{year}/{month:02d}"
+    ym = f"{year}-{month:02d}"
     url = (f"{SUPABASE_URL}/rest/v1/kintai"
            f"?name=eq.{urllib.parse.quote(TARGET_NAME)}"
            f"&date=like.{urllib.parse.quote(ym + '%')}"
@@ -233,14 +233,14 @@ def fetch_sheet_rows(year: int, month: int) -> list:
     rows = []
     for r in records:
         date_str     = r.get("date", "")
-        checkin_str  = r.get("checkin", "")
-        checkout_str = r.get("checkout", "")
+        checkin_str  = r.get("check_in", "")
+        checkout_str = r.get("check_out", "")
 
         if not date_str or not checkin_str or not checkout_str:
             continue
 
         try:
-            dt = datetime.datetime.strptime(date_str[:10], "%Y/%m/%d").date()
+            dt = datetime.datetime.strptime(date_str[:10], "%Y-%m-%d").date()
         except Exception:
             continue
 
