@@ -1,6 +1,6 @@
 const SUPABASE_URL = 'https://orkwjindnxjkaplsbcdb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_selWw3fEQWrExooHJZTt_w_7OKkA3hQ';
-const BASE_URL = 'https://naokstarider2624114-art.github.io/kintai/kintai.html';
+const BASE_URL = 'https://attendance-management-two-lyart.vercel.app/';
 
 function getDeviceId() {
   const key = 'kintai_device_id';
