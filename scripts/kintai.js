@@ -187,7 +187,7 @@ async function getMonthRecords(name) {
   const nextMonthYmd = toDateInputValue(nextMonth);
 
   const rows = await sbFetch(
-    `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(start)}&date=lt.${encodeURIComponent(nextMonthYmd)}&select=date,work_hours,check_in,check_out`
+    `kintai?name=eq.${encodeURIComponent(name)}&date=gte.${encodeURIComponent(start)}&date=lt.${encodeURIComponent(nextMonthYmd)}&select=date,work_hours,check_in,check_out,remarks`
   );
   return rows || [];
 }
@@ -332,6 +332,9 @@ function updateAttendanceAction(todayRec) {
     option.textContent = optionValue;
     kindSelect.appendChild(option);
   });
+  if (todayRec?.remarks && options.includes(todayRec.remarks)) {
+    kindSelect.value = todayRec.remarks;
+  }
 
   button.dataset.kind = kind;
   button.classList.toggle('btn-checkin', kind === 'checkin');
@@ -388,14 +391,17 @@ async function upsertFixRecord({ date, checkin, checkout, name, kind = 'checkin'
   );
 
   const workHours = resolveReasonWorkHours(remarks, checkin, checkout);
+  const noTimeRequired = remarks === '病欠';
 
   if (existing && existing.length) {
     const row = existing[0];
     const nextPayload = {
-      check_in: kind === 'checkin' ? checkin : (row.check_in || checkin),
-      check_out: kind === 'checkout' ? checkout : (row.check_out || checkout),
+      check_in: noTimeRequired ? null : (kind === 'checkin' ? checkin : (row.check_in || checkin)),
+      check_out: noTimeRequired ? null : (kind === 'checkout' ? checkout : (row.check_out || checkout)),
       work_hours: workHours,
-      remarks
+      remarks,
+      checkin_at: noTimeRequired ? null : row.checkin_at,
+      checkout_at: noTimeRequired ? null : row.checkout_at
     };
 
     await sbFetch(`kintai?id=eq.${row.id}`, {
@@ -411,12 +417,12 @@ async function upsertFixRecord({ date, checkin, checkout, name, kind = 'checkin'
     body: JSON.stringify({
       name,
       date,
-      check_in: kind === 'checkin' ? checkin : null,
-      check_out: kind === 'checkout' ? checkout : null,
+      check_in: noTimeRequired ? null : (kind === 'checkin' ? checkin : null),
+      check_out: noTimeRequired ? null : (kind === 'checkout' ? checkout : null),
       work_hours: workHours,
       remarks,
-      checkin_at: kind === 'checkin' ? new Date(`${date}T${checkin}:00`).toISOString() : null,
-      checkout_at: kind === 'checkout' ? new Date(`${date}T${checkout}:00`).toISOString() : null
+      checkin_at: noTimeRequired || kind !== 'checkin' ? null : new Date(`${date}T${checkin}:00`).toISOString(),
+      checkout_at: noTimeRequired || kind !== 'checkout' ? null : new Date(`${date}T${checkout}:00`).toISOString()
     })
   });
 
