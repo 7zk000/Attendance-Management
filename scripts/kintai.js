@@ -293,6 +293,10 @@ function getReasonOptions(kind) {
   return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', 'その他'];
 }
 
+function getFixReasonOptions() {
+  return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', '退勤', '早退', 'その他'];
+}
+
 let fixActionKind = 'checkin';
 
 function updateAttendanceAction(todayRec) {
@@ -335,7 +339,7 @@ function updateAttendanceAction(todayRec) {
   const fixReason = document.getElementById('fix-reason');
   if (fixReason) {
     const currentValue = fixReason.value;
-    const options = getReasonOptions(fixActionKind);
+    const options = getFixReasonOptions();
     fixReason.innerHTML = options.map((label) => `<option value="${label}">${label}</option>`).join('');
     fixReason.value = options.includes(currentValue) ? currentValue : options[0];
   }
@@ -532,7 +536,7 @@ function renderApp(user) {
 
   const fixReason = document.getElementById('fix-reason');
   if (fixReason) {
-    fixReason.innerHTML = getReasonOptions(fixActionKind)
+    fixReason.innerHTML = getFixReasonOptions()
       .map((label) => `<option value="${label}">${label}</option>`)
       .join('');
   }
