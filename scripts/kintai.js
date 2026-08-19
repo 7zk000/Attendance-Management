@@ -324,6 +324,16 @@ function updateAttendanceAction(todayRec) {
   button.classList.toggle('btn-checkout', kind === 'checkout');
   button.textContent = isComplete ? '退勤済み' : (isCheckout ? '退勤する' : '出勤する');
   button.disabled = isComplete;
+
+  const fixButton = document.getElementById('fix-button');
+  const fixKind = document.getElementById('fix-kind');
+  if (fixButton) {
+    fixButton.textContent = isCheckout ? '退勤時間を修正する' : '出勤時間を修正する';
+  }
+  if (fixKind) {
+    fixKind.value = kind;
+    fixKind.dispatchEvent(new Event('change'));
+  }
 }
 
 function renderHistory(rows) {
@@ -474,7 +484,7 @@ function renderApp(user) {
             </div>
             <button class="btn btn-checkin" id="attendance-button" data-kind="checkin">出勤する</button>
           </div>
-          <button class="btn btn-fix" onclick="showFixPanel()">時間を修正する</button>
+          <button class="btn btn-fix" id="fix-button" onclick="showFixPanel()">出勤時間を修正する</button>
         </div>
       </div>
 
