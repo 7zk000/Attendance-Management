@@ -429,7 +429,8 @@ function renderApp(user) {
       <div id="loading" class="loading">読み込み中...</div>
 
       <div id="main" style="display:none">
-        <div class="card">
+        <div class="card attendance-card">
+          <div class="attendance-section">
           <div class="card-head">
             <div class="card-label">出勤</div>
             <div class="card-date" id="checkin-date">${toDateInputValue(new Date())}</div>
@@ -447,8 +448,8 @@ function renderApp(user) {
             </select>
           </div>
           <button class="btn btn-checkin" id="btn-checkin" data-kind="checkin">出勤する</button>
-        </div>
-        <div class="card">
+          </div>
+          <div class="attendance-section">
           <div class="card-head">
             <div class="card-label">退勤</div>
             <div class="card-date" id="checkout-date">${toDateInputValue(new Date())}</div>
@@ -463,6 +464,7 @@ function renderApp(user) {
           </div>
           <button class="btn btn-checkout" id="btn-checkout" data-kind="checkout">退勤する</button>
           <button class="btn btn-fix" onclick="showFixPanel()">時間を修正する</button>
+          </div>
         </div>
       </div>
 

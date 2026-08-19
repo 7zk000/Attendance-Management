@@ -13,6 +13,9 @@ body { font-family: -apple-system, sans-serif; background: #f5f5f0; min-height: 
 .stat-value.green { color: #1D9E75; }
 .stat-value.orange { color: #D85A30; }
 .card { background: #fff; border-radius: 16px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.attendance-card { padding: 0 1.25rem; }
+.attendance-section { padding: 1.25rem 0; }
+.attendance-section + .attendance-section { border-top: 1px solid #f0f0eb; }
 .user-name { text-align: center; font-size: 1.1rem; font-weight: 600; color: #222; margin-bottom: 1rem; }
 .summary-box { background: #fff; border-radius: 16px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 .summary-box > div { display: flex; justify-content: space-between; align-items: center; }
