@@ -89,8 +89,15 @@ async function register() {
   const deviceId = getDeviceId();
   const newToken = generateToken();
 
-  const created = await sbRpc('register_user', { p_name: name, p_token: newToken, p_device_id: deviceId });
-  const user = created && created.length > 0 ? created[0] : null;
+  let user;
+  try {
+    const created = await sbRpc('register_user', { p_name: name, p_token: newToken, p_device_id: deviceId });
+    user = created && created.length > 0 ? created[0] : null;
+  } catch (error) {
+    console.error('register_user failed:', error);
+    showStatus('登録に失敗しました。しばらくしてから再度お試しください。');
+    return;
+  }
 
   if (!user) {
     showStatus('登録に失敗しました');
