@@ -10,7 +10,7 @@
 </script>
 
 <div
-	class="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 shadow-lg shadow-black/30 {className}"
+	class="glass-panel flex flex-col gap-3 rounded-[28px] border border-border bg-surface p-5 shadow-[inset_0_1px_0_0_rgb(255_255_255_/_10%),0_8px_30px_-8px_rgb(0_0_0_/_50%)] {className}"
 	{...rest}
 >
 	{@render children()}
