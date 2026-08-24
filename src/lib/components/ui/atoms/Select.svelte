@@ -37,7 +37,7 @@
 </script>
 
 <select
-	class="w-full rounded-lg border bg-surface px-3 text-foreground outline-offset-2 outline-ring transition-colors focus-visible:outline-2 disabled:opacity-40 {sizeClasses[
+	class="glass-panel w-full rounded-xl border bg-surface px-3 text-foreground outline-offset-2 outline-ring transition-colors focus-visible:outline-2 disabled:opacity-40 {sizeClasses[
 		size
 	]} {isError ? 'border-destructive' : 'border-input'} {className}"
 	{disabled}

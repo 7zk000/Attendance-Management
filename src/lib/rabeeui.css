@@ -8,17 +8,17 @@
 @theme {
 	--color-background: #020617; /* slate-950 */
 	--color-foreground: #f1f5f9; /* slate-100 */
-	--color-surface: #0f172a; /* slate-900 */
-	--color-border: #1e293b; /* slate-800 */
-	--color-input: #334155; /* slate-700 */
+	--color-surface: rgb(15 23 42 / 55%); /* slate-900, translucent for the glass panels */
+	--color-border: rgb(255 255 255 / 12%); /* hairline that reads on any glass tint */
+	--color-input: rgb(255 255 255 / 16%);
 	--color-ring: #3b82f6; /* blue-500 */
-	--color-muted-foreground: #64748b; /* slate-500 */
-	--color-accent: #1e293b; /* slate-800, hover overlay */
+	--color-muted-foreground: #94a3b8; /* slate-400, kept legible over glass */
+	--color-accent: rgb(255 255 255 / 8%); /* hover overlay */
 	--color-accent-foreground: #f1f5f9;
 
 	--color-primary: #2563eb; /* blue-600 */
 	--color-primary-foreground: #ffffff;
-	--color-secondary: #1e293b; /* slate-800 */
+	--color-secondary: rgb(255 255 255 / 6%);
 	--color-secondary-foreground: #cbd5e1; /* slate-300 */
 	--color-success: #059669; /* emerald-600 */
 	--color-success-foreground: #ffffff;
@@ -37,4 +37,19 @@ body {
 		'Hiragino Sans',
 		Meiryo,
 		sans-serif;
+	min-height: 100vh;
+	background-color: var(--color-background);
+	background-image:
+		radial-gradient(circle at 12% 18%, rgb(37 99 235 / 35%), transparent 42%),
+		radial-gradient(circle at 88% 8%, rgb(5 150 105 / 25%), transparent 38%),
+		radial-gradient(circle at 50% 100%, rgb(147 51 234 / 22%), transparent 48%);
+	background-attachment: fixed;
+	background-repeat: no-repeat;
+}
+
+/* Frosted glass surface: shared by cards, modals, inputs and selects so the
+   backdrop-blur sits above the gradient blobs in `body` above. */
+.glass-panel {
+	backdrop-filter: blur(24px) saturate(160%);
+	-webkit-backdrop-filter: blur(24px) saturate(160%);
 }

@@ -30,15 +30,15 @@
 	});
 
 	const variantClasses = {
-		success: 'border-success/40 bg-success/10 text-success',
-		danger: 'border-destructive/40 bg-destructive/10 text-destructive',
-		warning: 'border-warning/40 bg-warning/10 text-warning'
+		success: 'border-success/40 bg-success/15 text-success',
+		danger: 'border-destructive/40 bg-destructive/15 text-destructive',
+		warning: 'border-warning/40 bg-warning/15 text-warning'
 	} as const;
 </script>
 
 {#if isOpen}
 	<div
-		class="flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium shadow-lg shadow-black/30 {variantClasses[
+		class="glass-panel flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium shadow-[inset_0_1px_0_0_rgb(255_255_255_/_10%),0_8px_24px_-6px_rgb(0_0_0_/_45%)] {variantClasses[
 			variant
 		]} {className}"
 		transition:fly={{ y: -12, duration: 200 }}

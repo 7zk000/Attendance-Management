@@ -33,13 +33,13 @@
 {#if isOpen}
 	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
 		<div
-			class="absolute inset-0 bg-black/70"
+			class="absolute inset-0 bg-black/50 backdrop-blur-sm"
 			transition:fade={{ duration: 150 }}
 			onclick={close}
 			role="presentation"
 		></div>
 		<div
-			class="relative w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-lg shadow-black/40 {className}"
+			class="glass-panel relative w-full max-w-lg rounded-[28px] border border-border bg-surface p-6 shadow-[inset_0_1px_0_0_rgb(255_255_255_/_10%),0_20px_60px_-10px_rgb(0_0_0_/_60%)] {className}"
 			transition:scale={{ start: 0.96, duration: 150 }}
 			role="dialog"
 			aria-modal="true"

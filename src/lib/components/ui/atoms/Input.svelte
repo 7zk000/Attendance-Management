@@ -9,7 +9,7 @@
 </script>
 
 <input
-	class="relative min-h-11 w-full rounded-lg border bg-surface px-3 py-2 text-sm text-foreground outline-offset-2 outline-ring transition-colors placeholder:text-muted-foreground focus-visible:outline-2 {isError
+	class="glass-panel relative min-h-11 w-full rounded-xl border bg-surface px-3 py-2 text-sm text-foreground outline-offset-2 outline-ring transition-colors placeholder:text-muted-foreground focus-visible:outline-2 {isError
 		? 'border-destructive'
 		: 'border-input'} {className}"
 	bind:value

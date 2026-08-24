@@ -85,7 +85,7 @@
 		{:else}
 			<div class="space-y-3">
 				<div class="text-xs text-muted-foreground">あなた専用のURLはこちらです</div>
-				<div class="rounded-lg border border-input bg-background px-3 py-2.5 text-sm break-all text-primary">
+				<div class="glass-panel rounded-xl border border-input bg-surface px-3 py-2.5 text-sm break-all text-primary">
 					{resultUrl}
 				</div>
 				<Button block variant="secondary" onclick={copyUrl}>URLをコピーする</Button>
