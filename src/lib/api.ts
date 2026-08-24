@@ -50,6 +50,31 @@ export async function getTodayRecord(name: string): Promise<KintaiRecord | null>
 	return getRecordForDate(name, toDateInputValue(new Date()));
 }
 
+// A night shift (夜勤) checks in before midnight and checks out after it, so
+// "today's" record can actually still be filed under yesterday's date once the
+// date rolls over. Prefer an unfinished shift (checked in, not yet checked out)
+// from today or yesterday over strictly looking up today's row.
+export async function getActiveRecord(name: string): Promise<KintaiRecord | null> {
+	const today = toDateInputValue(new Date());
+	const yesterday = toDateInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+	const rows = unwrap(
+		await supabase
+			.from('kintai')
+			.select('id,name,date,check_in,check_out,checkin_at,checkout_at,work_hours,remarks')
+			.eq('name', name)
+			.in('date', [yesterday, today])
+			.order('date', { ascending: false })
+	) as KintaiRecord[];
+
+	if (!rows || !rows.length) return null;
+
+	const openShift = rows.find((row) => row.check_in && !row.check_out);
+	if (openShift) return openShift;
+
+	return rows.find((row) => row.date === today) || null;
+}
+
 export async function getMonthRecords(name: string, monthStart: string, monthEndExclusive: string): Promise<KintaiRecord[]> {
 	const rows = unwrap(
 		await supabase

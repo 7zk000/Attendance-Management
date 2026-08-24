@@ -24,9 +24,9 @@
 	} from '$lib/kintai-utils';
 	import {
 		fixKintai,
+		getActiveRecord,
 		getCurrentMonthRecords,
 		getRecordForDate,
-		getTodayRecord,
 		loadUserByToken,
 		stampKintai,
 		type KintaiUser
@@ -79,15 +79,17 @@
 
 	async function refresh() {
 		if (!user) return;
-		const [records, today] = await Promise.all([
+		const [records, active] = await Promise.all([
 			getCurrentMonthRecords(user.name),
-			getTodayRecord(user.name)
+			getActiveRecord(user.name)
 		]);
 		monthRecords = records;
-		todayRecord = today;
-		fixDate = toDateInputValue(new Date());
-		if (today?.check_in) fixCheckin = today.check_in;
-		if (today?.check_out) fixCheckout = today.check_out;
+		todayRecord = active;
+		// A night shift's active record may still be filed under yesterday's date
+		// once it rolls past midnight, so default the fix modal to that date.
+		fixDate = active?.date || toDateInputValue(new Date());
+		if (active?.check_in) fixCheckin = active.check_in;
+		if (active?.check_out) fixCheckout = active.check_out;
 	}
 
 	onMount(async () => {
