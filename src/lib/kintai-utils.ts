@@ -13,9 +13,11 @@ export type KintaiRecord = {
 export function calcWorkHours(checkin: string | null | undefined, checkout: string | null | undefined): number {
 	if (!checkin || !checkout) return 0;
 
+	const isTimeOnly = (value: string) => value.includes(':') && value.split(':').length === 2;
+
 	const parseValue = (value: string) => {
 		if (!value) return null;
-		if (value.includes(':') && value.split(':').length === 2) {
+		if (isTimeOnly(value)) {
 			const [hours, minutes] = value.split(':').map(Number);
 			const base = new Date();
 			base.setHours(hours, minutes, 0, 0);
@@ -28,6 +30,13 @@ export function calcWorkHours(checkin: string | null | undefined, checkout: stri
 	const start = parseValue(checkin);
 	const end = parseValue(checkout);
 	if (!start || !end) return 0;
+
+	// "HH:MM"-only values carry no date, so a night shift (e.g. 22:00 -> 06:00)
+	// naively diffs negative. Since both values share today's date in that case,
+	// treat an end time earlier than the start time as spilling into the next day.
+	if (isTimeOnly(checkin) && isTimeOnly(checkout) && end.getTime() < start.getTime()) {
+		end.setDate(end.getDate() + 1);
+	}
 
 	const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
 	return Math.max(0, diffHours);
