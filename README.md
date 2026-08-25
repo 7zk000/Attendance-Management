@@ -60,7 +60,7 @@ npm run preview  # build/ をローカルでプレビュー
 npm run check    # 型チェック(svelte-check)
 ```
 
-Supabase の接続情報は `.env` の `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`(公開用の publishable key なのでコミット済み)で設定している。管理画面のログインコードは `PUBLIC_ADMIN_ACCESS_TOKEN` で設定する(未設定時は `admin`)。
+Supabase の接続情報は `.env` の `PUBLIC_SUPABASE_URL` / `PUBLIC_SUPABASE_ANON_KEY`(公開用の publishable key なのでコミット済み)で設定している。管理画面のログインコードは `PUBLIC_ADMIN_ACCESS_TOKEN` で設定する。
 
 `npm run build` は `@sveltejs/adapter-static` で `build/` にプリレンダリングされた静的サイトを出力する(`/`・`/register`・`/manage` の3ページとも実データ取得はすべてクライアント側でSupabaseを直接呼び出すため、サーバー実行環境は不要)。Vercel は SvelteKit プロジェクトとして自動検出されるはずなので、追加のビルド設定は基本的に不要。
 
