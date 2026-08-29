@@ -26,7 +26,7 @@ import urllib.parse
 # ============================================================
 SUPABASE_URL = "https://fepmlhggkmdfhcfcyuxi.supabase.co"
 SUPABASE_KEY = "sb_publishable_ccPWCQ40MjmvRAR4w8SefA_RW3AQ_37"
-TARGET_NAME  = "若山直樹"   # ← 自分の名前に変更
+TARGET_NAME  = "平川佳樹"   # ← 自分の名前に変更
 # ============================================================
 
 SHEET_NAME  = "作業完了報告書"
@@ -217,10 +217,17 @@ def parse_time(s: str) -> datetime.time:
 def fetch_sheet_rows(year: int, month: int) -> list:
     """Supabaseから当月の勤怠データを取得する"""
     import urllib.parse
-    ym = f"{year}-{month:02d}"
+    month_start = f"{year}-{month:02d}-01"
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+    month_end = f"{next_year}-{next_month:02d}-01"
+
     url = (f"{SUPABASE_URL}/rest/v1/kintai"
            f"?name=eq.{urllib.parse.quote(TARGET_NAME)}"
-           f"&date=like.{urllib.parse.quote(ym + '%')}"
+           f"&date=gte.{month_start}"
+           f"&date=lt.{month_end}"
            f"&select=*&order=date.asc")
 
     req = urllib.request.Request(url, headers={
