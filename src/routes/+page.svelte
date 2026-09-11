@@ -8,6 +8,7 @@
 	import Spinner from '$lib/components/ui/atoms/Spinner.svelte';
 	import Modal from '$lib/components/ui/modals/Modal.svelte';
 	import Toast from '$lib/components/ui/items/Toast.svelte';
+	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import {
 		buildMonthCsv,
 		buildTimeOptions,
@@ -23,6 +24,7 @@
 		type KintaiRecord
 	} from '$lib/kintai-utils';
 	import {
+		deleteKintai,
 		fixKintai,
 		getActiveRecord,
 		getCurrentMonthRecords,
@@ -50,6 +52,10 @@
 	let fixReason = $state(getFixReasonOptions()[0]);
 	let fixCheckin = $state('09:00');
 	let fixCheckout = $state('18:00');
+
+	let deleteOpen = $state(false);
+	let deleteDate = $state('');
+	let deleting = $state(false);
 
 	let toast = $state<{ isOpen: boolean; message: string; variant: 'success' | 'danger' | 'warning' }>({
 		isOpen: false,
@@ -184,6 +190,35 @@
 		await refresh();
 	}
 
+	// Deleting is irreversible, so both entry points (the history list and the
+	// fix modal) route through the same confirmation step.
+	function askDelete(date: string) {
+		deleteDate = date;
+		fixOpen = false;
+		deleteOpen = true;
+	}
+
+	async function confirmDelete() {
+		if (!user || !deleteDate) return;
+
+		deleting = true;
+		try {
+			const deleted = await deleteKintai({ token: user.token, date: deleteDate });
+			if (deleted > 0) {
+				showToast('削除しました', 'success');
+			} else {
+				showToast('その日のデータはありませんでした', 'warning');
+			}
+			deleteOpen = false;
+			await refresh();
+		} catch (error) {
+			console.error('delete_kintai failed:', error);
+			showToast('削除に失敗しました', 'danger');
+		} finally {
+			deleting = false;
+		}
+	}
+
 	function handleExportCsv() {
 		if (!user || !monthRecords.length) {
 			showToast('出力できる履歴がありません', 'danger');
@@ -293,6 +328,14 @@
 							<div class="w-12 shrink-0 text-right text-sm font-semibold text-success">
 								{(Number(row.work_hours) || 0).toFixed(1)}h
 							</div>
+							<button
+								type="button"
+								class="shrink-0 cursor-pointer rounded-lg p-1.5 text-muted-foreground outline-offset-2 outline-ring transition-colors hover:bg-destructive/15 hover:text-destructive focus-visible:outline-2"
+								onclick={() => askDelete(row.date)}
+								aria-label="{historyDateLabel(row.date)}のデータを削除"
+							>
+								<Trash2 class="h-4 w-4" />
+							</button>
 						</div>
 					{/each}
 				</div>
@@ -328,7 +371,23 @@
 			</div>
 		{/if}
 		<Button block onclick={submitFix}>修正を送信</Button>
+		<Button block variant="danger" onclick={() => askDelete(fixDate)}>この日のデータを削除</Button>
 		<Button block variant="secondary" onclick={() => (fixOpen = false)}>キャンセル</Button>
+	</div>
+</Modal>
+
+<Modal bind:isOpen={deleteOpen}>
+	<div class="space-y-3">
+		<h2 class="text-sm font-semibold text-foreground">勤怠データの削除</h2>
+		<p class="text-sm leading-relaxed text-muted-foreground">
+			{formatYmd(deleteDate)} のデータを削除します。<br />この操作は取り消せません。
+		</p>
+		<Button block variant="danger" disabled={deleting} onclick={confirmDelete}>
+			{deleting ? '削除中...' : '削除する'}
+		</Button>
+		<Button block variant="secondary" disabled={deleting} onclick={() => (deleteOpen = false)}>
+			キャンセル
+		</Button>
 	</div>
 </Modal>
 
