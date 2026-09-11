@@ -117,6 +117,18 @@ export async function stampKintai(params: {
 	);
 }
 
+// Returns how many rows were removed, so the caller can distinguish a real
+// deletion from "there was no record on that date".
+export async function deleteKintai(params: { token: string; date: string }): Promise<number> {
+	const deleted = unwrap(
+		await supabase.rpc('delete_kintai', {
+			p_token: params.token,
+			p_date: params.date
+		})
+	) as number | null;
+	return Number(deleted) || 0;
+}
+
 export async function fixKintai(params: {
 	token: string;
 	date: string;

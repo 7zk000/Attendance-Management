@@ -90,7 +90,8 @@ kintai/
 │       ├── 003_harden_access.sql
 │       ├── 004_fix_users_is_admin_column.sql
 │       ├── 005_fix_register_user_ambiguous_id.sql
-│       └── 006_support_night_shift_checkout.sql
+│       ├── 006_support_night_shift_checkout.sql
+│       └── 007_add_delete_kintai.sql
 ├── app/
 │   ├── fill_attendance.py        ← Excel 自動転記スクリプト(月末処理)
 │   ├── 実行する.command          ← Mac 用ランチャー
