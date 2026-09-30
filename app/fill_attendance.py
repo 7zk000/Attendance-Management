@@ -4,17 +4,21 @@
 Supabase勤怠DB -> 作業実績報告書(Excel) 自動転記スクリプト
 
 【使い方】
-このスクリプトと同じフォルダに先月分のExcelを入れて、
-ランチャー(実行する.command / 実行する.bat)をダブルクリック
+このスクリプトと同じフォルダに、全員分の先月分Excel(ファイル名にそれぞれの
+名前が入っているもの)をまとめて入れて、
+ランチャー(実行する.command / 実行する.bat)をダブルクリックすると、
+Supabaseに登録されている全ユーザー分を一括で転記する。
+テンプレートが見つからない人はスキップされ、実行結果の一覧に表示される。
 
 【フォルダ構成】
   勤怠表自動入力/
   ├── fill_attendance.py
   ├── 実行する.command (Mac)
   ├── 実行する.bat     (Windows)
-  ├── 作業実績報告書_YYYYMM.xlsx  ← 前回の出力が自動で残る
+  ├── 作業実績報告書(会社名_平川佳樹)_YYYYMM.xlsx  ← 前回の出力が自動で残る
+  ├── 作業実績報告書(会社名_山田太郎)_YYYYMM.xlsx
   └── 過去/
-      └── 作業実績報告書_YYYYMM.xlsx
+      └── ...
 """
 
 import sys, datetime, zipfile, shutil, os, glob, re, json
@@ -22,11 +26,8 @@ import urllib.request
 import urllib.parse
 
 # ============================================================
-# ★ここを自分の情報に書き換えてください★
-# ============================================================
 SUPABASE_URL = "https://fepmlhggkmdfhcfcyuxi.supabase.co"
 SUPABASE_KEY = "sb_publishable_ccPWCQ40MjmvRAR4w8SefA_RW3AQ_37"
-TARGET_NAME  = "平川佳樹"   # ← 自分の名前に変更
 # ============================================================
 
 SHEET_NAME  = "作業完了報告書"
@@ -199,7 +200,7 @@ def fix_time_cell_styles(xml: str) -> str:
 
 
 def edit_xml_and_save(source_path: str, output_path: str,
-                      year: int, month: int, person_name: str, rows: list):
+                      year: int, month: int, rows: list):
     """元ファイルのzipをベースにsheet1.xmlだけ編集して保存"""
     with zipfile.ZipFile(source_path, 'r') as z:
         sheet_xml = z.read('xl/worksheets/sheet1.xml').decode('utf-8')
@@ -282,7 +283,25 @@ def parse_time(s: str) -> datetime.time:
     return datetime.time(int(parts[0]), int(parts[1]))
 
 
-def fetch_sheet_rows(year: int, month: int) -> list:
+def fetch_all_user_names() -> list:
+    """Supabaseに登録されている全ユーザー名を取得する(打刻画面の登録者一覧)"""
+    url = f"{SUPABASE_URL}/rest/v1/rpc/list_user_names"
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req) as res:
+        records = json.loads(res.read())
+    return sorted({(r.get("name") or "").strip() for r in records if r.get("name")})
+
+
+def fetch_sheet_rows(year: int, month: int, target_name: str) -> list:
     """Supabaseから当月の勤怠データを取得する"""
     import urllib.parse
     month_start = f"{year}-{month:02d}-01"
@@ -293,7 +312,7 @@ def fetch_sheet_rows(year: int, month: int) -> list:
     month_end = f"{next_year}-{next_month:02d}-01"
 
     url = (f"{SUPABASE_URL}/rest/v1/kintai"
-           f"?name=eq.{urllib.parse.quote(TARGET_NAME)}"
+           f"?name=eq.{urllib.parse.quote(target_name)}"
            f"&date=gte.{month_start}"
            f"&date=lt.{month_end}"
            f"&select=*&order=date.asc")
@@ -358,17 +377,23 @@ def fetch_sheet_rows(year: int, month: int) -> list:
 # -------------------------------------------------------
 # ファイル検出・アーカイブ
 # -------------------------------------------------------
-def find_excel(folder: str) -> str:
+def list_candidate_excels(folder: str) -> list:
+    """フォルダ内のテンプレート候補(.xlsx)を一覧する(一時ファイル・過去フォルダは除く)"""
     archive_dir = os.path.join(folder, ARCHIVE_DIR)
-    xlsxs = [
+    return [
         f for f in glob.glob(os.path.join(folder, "*.xlsx"))
         if not os.path.basename(f).startswith("~$")
         and os.path.dirname(os.path.abspath(f)) != os.path.abspath(archive_dir)
     ]
-    if not xlsxs:
-        raise FileNotFoundError("Excelファイル(.xlsx)が見つかりません。先月分を入れてください。")
-    xlsxs.sort(key=os.path.getmtime, reverse=True)
-    return xlsxs[0]
+
+
+def find_excel_for_name(folder: str, name: str) -> str:
+    """ファイル名に名前が含まれる .xlsx を探す(複数あれば最終更新日時が新しい方)"""
+    candidates = [f for f in list_candidate_excels(folder) if name in os.path.basename(f)]
+    if not candidates:
+        raise FileNotFoundError(f"「{name}」のテンプレートExcelが見つかりません。")
+    candidates.sort(key=os.path.getmtime, reverse=True)
+    return candidates[0]
 
 
 def archive_source(source_path: str, folder: str) -> str:
@@ -379,22 +404,10 @@ def archive_source(source_path: str, folder: str) -> str:
     return dest
 
 
-# -------------------------------------------------------
-# メイン
-# -------------------------------------------------------
-def main():
-    folder = os.path.dirname(os.path.abspath(__file__))
-
-    try:
-        source_path = find_excel(folder)
-    except FileNotFoundError as e:
-        print(f"❌ エラー: {e}")
-        input("\nEnterキーを押して終了してください...")
-        sys.exit(1)
-
-    # 元Excelの年月から翌月を自動判定
-    base = os.path.basename(source_path)
-    m = re.search(r'(\d{4})(\d{2})', base)
+def determine_target_year_month(filename: str):
+    """テンプレートのファイル名に含まれるYYYYMMの翌月を対象年月として返す
+    (見つからない場合は今日から見た先月を対象とする)"""
+    m = re.search(r'(\d{4})(\d{2})', filename)
     if m:
         src_year, src_month = int(m.group(1)), int(m.group(2))
         year  = src_year if src_month < 12 else src_year + 1
@@ -403,44 +416,76 @@ def main():
         today = datetime.date.today()
         prev  = today.replace(day=1) - datetime.timedelta(days=1)
         year, month = prev.year, prev.month
+    return year, month
 
-    print(f"📅 取得対象: {year}年{month}月(入っているExcelの翌月)")
-    print(f"👤 対象者  : {TARGET_NAME}")
-    print(f"📊 元Excel : {base}")
-    print()
-    print("🔄 スプレッドシートからデータを取得中...")
 
-    try:
-        rows = fetch_sheet_rows(year, month)
-    except Exception as e:
-        print(f"❌ データ取得エラー: {e}")
-        input("\nEnterキーを押して終了してください...")
-        sys.exit(1)
+def process_person(folder: str, name: str) -> str:
+    """1人分の転記を実行し、結果メッセージを返す。
+    テンプレートが見つからない場合はFileNotFoundErrorがそのまま伝播する。
+    """
+    source_path = find_excel_for_name(folder, name)
+    base = os.path.basename(source_path)
+    year, month = determine_target_year_month(base)
 
+    rows = fetch_sheet_rows(year, month, name)
     if not rows:
-        print(f"⚠️  {year}年{month}月の「{TARGET_NAME}」のデータが見つかりませんでした。")
-        input("\nEnterキーを押して終了してください...")
-        sys.exit(1)
+        return f"⚠️  {name}: {year}年{month}月のデータが見つかりませんでした(スキップ)"
 
-    print(f"✅ {len(rows)}件のデータを取得しました。")
-
-    # 出力ファイル名を自動生成
     new_ym   = f"{year}{month:02d}"
     new_name = re.sub(r'\d{6}(?=\.xlsx)', new_ym, base)
     if new_name == base:
         new_name = base.replace(".xlsx", f"_{new_ym}.xlsx")
     output_path = os.path.join(folder, new_name)
-    print(f"💾 出力    : {new_name}")
-    print()
 
-    count = edit_xml_and_save(source_path, output_path, year, month, TARGET_NAME, rows)
+    count = edit_xml_and_save(source_path, output_path, year, month, rows)
 
     if os.path.abspath(source_path) != os.path.abspath(output_path):
-        dest = archive_source(source_path, folder)
-        print(f"📦 元Excelを「過去」フォルダに移動しました: {os.path.basename(dest)}")
+        archive_source(source_path, folder)
+
+    return f"✅ {name}: {year}年{month}月分を作成しました({count}件、{new_name})"
 
 
-    print(f"✅ 完了！ {count}件のデータを転記しました。")
+# -------------------------------------------------------
+# メイン
+# -------------------------------------------------------
+def main():
+    folder = os.path.dirname(os.path.abspath(__file__))
+
+    print("🔄 登録ユーザー一覧を取得中...")
+    try:
+        names = fetch_all_user_names()
+    except Exception as e:
+        print(f"❌ ユーザー一覧の取得に失敗しました: {e}")
+        input("\nEnterキーを押して終了してください...")
+        sys.exit(1)
+
+    if not names:
+        print("⚠️  登録されているユーザーがいません。")
+        input("\nEnterキーを押して終了してください...")
+        sys.exit(1)
+
+    print(f"👥 対象ユーザー: {len(names)}名 ({'、'.join(names)})")
+    print()
+
+    results = []
+    for name in names:
+        print(f"--- {name} ---")
+        try:
+            message = process_person(folder, name)
+        except FileNotFoundError as e:
+            message = f"⏭️  {name}: {e}(スキップ)"
+        except Exception as e:
+            message = f"❌ {name}: 処理中にエラーが発生しました({e})(スキップ)"
+        print(message)
+        results.append(message)
+        print()
+
+    print("=" * 40)
+    print("実行結果まとめ")
+    print("=" * 40)
+    for message in results:
+        print(message)
+
     input("\nEnterキーを押して終了してください...")
 
 
