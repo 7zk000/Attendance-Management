@@ -415,7 +415,6 @@
 			</div>
 		{/if}
 		<Button block onclick={submitFix}>修正を送信</Button>
-		<Button block variant="danger" onclick={() => askDelete(fixDate)}>この日のデータを削除</Button>
 		<Button block variant="secondary" onclick={() => (fixOpen = false)}>キャンセル</Button>
 	</div>
 </Modal>
