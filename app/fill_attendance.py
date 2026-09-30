@@ -122,6 +122,57 @@ def replace_cell_inplace(xml: str, cell_ref: str, value) -> str:
     return xml
 
 
+def _escape_xml_text(text: str) -> str:
+    return (text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
+
+def replace_cell_inplace_text(xml: str, cell_ref: str, text) -> str:
+    """文字列セルをXML上で直接置換する(t="inlineStr" として書き込む)。
+    L列はテンプレート側で t="s"(共有文字列)になっているため、数値用の
+    replace_cell_inplace とは別に、文字列として正しく認識される形で書き込む。
+    """
+
+    def to_empty(m):
+        tag = re.match(r'<c ([^>]+?)(?<!/)>', m.group())
+        attrs = re.sub(r'\s*t="[^"]*"', '', tag.group(1)) if tag else ''
+        return f'<c {attrs}/>'
+
+    def to_value(m):
+        tag = re.match(r'<c ([^>]+?)(?<!/)>', m.group())
+        attrs = re.sub(r'\s*t="[^"]*"', '', tag.group(1)) if tag else ''
+        escaped = _escape_xml_text(text)
+        return f'<c {attrs} t="inlineStr"><is><t xml:space="preserve">{escaped}</t></is></c>'
+
+    p_open = rf'<c r="{re.escape(cell_ref)}"[^>]*(?<!/)>.*?</c>'
+    xml, n1 = re.subn(p_open, to_empty if text is None else to_value, xml, flags=re.DOTALL)
+
+    if n1 == 0 and text is not None:
+        def self_to_value(m):
+            attrs = re.sub(r'\s*t="[^"]*"', '', m.group(1))
+            escaped = _escape_xml_text(text)
+            return f'<c r="{cell_ref}"{attrs} t="inlineStr"><is><t xml:space="preserve">{escaped}</t></is></c>'
+        p_self = rf'<c r="{re.escape(cell_ref)}"([^>]*)/>'
+        xml, _ = re.subn(p_self, self_to_value, xml)
+
+    return xml
+
+
+def build_work_content_text(location, task_type, remarks):
+    """L列(作業内容、勤怠等)に書き込むテキストを組み立てる。
+    日勤・夜勤で場所・作業内容が記録されている日は「【場所】作業内容」、
+    有給・私用のためなどの休み理由の日は理由名をそのまま表示する。
+    """
+    location = (location or '').strip()
+    task_type = (task_type or '').strip()
+    remarks = (remarks or '').strip()
+
+    if location or task_type:
+        return f"{location}{task_type}"
+    if remarks:
+        return remarks
+    return None
+
+
 def fix_time_cell_styles(xml: str) -> str:
     """G・H・I列20〜50行の時刻セルのスタイルをh:mm形式(s=15)に修正する"""
     def fix_style(m):
@@ -171,6 +222,13 @@ def edit_xml_and_save(source_path: str, output_path: str,
         sheet_xml = replace_cell_inplace(sheet_xml, f'G{r}', time_to_excel(s_time))
         sheet_xml = replace_cell_inplace(sheet_xml, f'H{r}', time_to_excel(e_time))
         sheet_xml = replace_cell_inplace(sheet_xml, f'I{r}', time_to_excel(b_time))
+
+        # L列(作業内容、勤怠等。L:Mは結合セルのためLにだけ書き込む)
+        l_text = build_work_content_text(
+            row_data.get('location'), row_data.get('task_type'), row_data.get('remarks')
+        )
+        if l_text:
+            sheet_xml = replace_cell_inplace_text(sheet_xml, f'L{r}', l_text)
 
         # 数式のキャッシュ値を直接計算して書き込む
         vals = calc_row(s_time, e_time, b_time)
@@ -268,6 +326,9 @@ def fetch_sheet_rows(year: int, month: int) -> list:
             "start_time": start,
             "end_time":   end,
             "break_time": datetime.time(break_hours, 0),
+            "location":   r.get("location"),
+            "task_type":  r.get("task_type"),
+            "remarks":    r.get("remarks"),
         })
 
     return rows
