@@ -16,8 +16,10 @@
 		downloadCsv,
 		formatYmd,
 		getFixReasonOptions,
+		getLocationOptions,
 		getMonthLabel,
 		getReasonOptions,
+		getTaskTypeOptions,
 		getTodayLabel,
 		resolveReasonWorkHours,
 		toDateInputValue,
@@ -38,6 +40,8 @@
 	const businessDays = calcBusinessDays();
 	const timeOptions = buildTimeOptions();
 	const fixReasonOptions = getFixReasonOptions().map((label) => ({ label, value: label }));
+	const locationOptions = getLocationOptions().map((label) => ({ label, value: label }));
+	const taskTypeOptions = getTaskTypeOptions().map((label) => ({ label, value: label }));
 	const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
 	let loading = $state(true);
@@ -47,6 +51,8 @@
 	let monthRecords = $state<KintaiRecord[]>([]);
 
 	let attendanceKindValue = $state('日勤');
+	let locationValue = $state(getLocationOptions()[0]);
+	let taskTypeValue = $state(getTaskTypeOptions()[0]);
 	let fixOpen = $state(false);
 	let fixDate = $state(toDateInputValue(new Date()));
 	let fixReason = $state(getFixReasonOptions()[0]);
@@ -73,6 +79,15 @@
 	let reasonOptions = $derived(getReasonOptions(actionKind));
 	let fixNoTimeRequired = $derived(fixReason === '病欠');
 
+	// 場所・作業内容は実際に働く日(日勤・夜勤)だけの入力項目。出勤時に選んだ
+	// 日勤/夜勤はチェックアウト側の理由選択肢(退勤/早退など)には無いので、
+	// 一度記録された場所・作業内容が残っているかどうかで「その日は実働日か」を判定する。
+	let showWorkDetails = $derived(
+		isCheckout
+			? Boolean(todayRecord?.location || todayRecord?.task_type)
+			: attendanceKindValue === '日勤' || attendanceKindValue === '夜勤'
+	);
+
 	let totalHours = $derived(monthRecords.reduce((sum, row) => sum + (Number(row.work_hours) || 0), 0));
 	let totalWorkDays = $derived(monthRecords.filter((row) => Number(row.work_hours) > 0).length);
 	let averageHours = $derived(totalWorkDays > 0 ? totalHours / totalWorkDays : 0);
@@ -83,6 +98,15 @@
 		const options = reasonOptions;
 		attendanceKindValue =
 			todayRecord?.remarks && options.includes(todayRecord.remarks) ? todayRecord.remarks : options[0];
+	});
+
+	$effect(() => {
+		const locOptions = getLocationOptions();
+		const typeOptions = getTaskTypeOptions();
+		locationValue =
+			todayRecord?.location && locOptions.includes(todayRecord.location) ? todayRecord.location : locOptions[0];
+		taskTypeValue =
+			todayRecord?.task_type && typeOptions.includes(todayRecord.task_type) ? todayRecord.task_type : typeOptions[0];
 	});
 
 	// The big time readout doubles as an input, so it can be set directly
@@ -151,7 +175,19 @@
 					)
 				: todayRecord?.work_hours || 0;
 
-		await stampKintai({ token: user.token, kind, time, at: now.toISOString(), workHours, remarks: reason });
+		const location = showWorkDetails ? locationValue : null;
+		const taskType = showWorkDetails ? taskTypeValue : null;
+
+		await stampKintai({
+			token: user.token,
+			kind,
+			time,
+			at: now.toISOString(),
+			workHours,
+			remarks: reason,
+			location,
+			taskType
+		});
 		await refresh();
 	}
 
@@ -177,7 +213,9 @@
 			checkinAt,
 			checkoutAt,
 			workHours,
-			remarks: reason
+			remarks: reason,
+			location: showWorkDetails ? locationValue : null,
+			taskType: showWorkDetails ? taskTypeValue : null
 		});
 
 		showToast('時刻を更新しました', 'success');
@@ -220,7 +258,9 @@
 			checkinAt,
 			checkoutAt,
 			workHours,
-			remarks: fixReason
+			remarks: fixReason,
+			location: existing?.location ?? null,
+			taskType: existing?.task_type ?? null
 		});
 
 		showToast('修正しました', 'success');
@@ -342,6 +382,10 @@
 					: 'text-foreground'}"
 			/>
 			<Select options={reasonOptions.map((label) => ({ label, value: label }))} bind:value={attendanceKindValue} />
+			{#if showWorkDetails}
+				<Select options={locationOptions} bind:value={locationValue} />
+				<Select options={taskTypeOptions} bind:value={taskTypeValue} />
+			{/if}
 			<Button
 				block
 				size="large"

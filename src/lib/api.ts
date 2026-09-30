@@ -39,7 +39,7 @@ export async function getRecordForDate(name: string, date: string): Promise<Kint
 	const rows = unwrap(
 		await supabase
 			.from('kintai')
-			.select('id,name,date,check_in,check_out,checkin_at,checkout_at,work_hours,remarks')
+			.select('id,name,date,check_in,check_out,checkin_at,checkout_at,work_hours,remarks,location,task_type')
 			.eq('name', name)
 			.eq('date', date)
 	) as KintaiRecord[];
@@ -61,7 +61,7 @@ export async function getActiveRecord(name: string): Promise<KintaiRecord | null
 	const rows = unwrap(
 		await supabase
 			.from('kintai')
-			.select('id,name,date,check_in,check_out,checkin_at,checkout_at,work_hours,remarks')
+			.select('id,name,date,check_in,check_out,checkin_at,checkout_at,work_hours,remarks,location,task_type')
 			.eq('name', name)
 			.in('date', [yesterday, today])
 			.order('date', { ascending: false })
@@ -79,7 +79,7 @@ export async function getMonthRecords(name: string, monthStart: string, monthEnd
 	const rows = unwrap(
 		await supabase
 			.from('kintai')
-			.select('date,work_hours,check_in,check_out,checkin_at,checkout_at,remarks')
+			.select('date,work_hours,check_in,check_out,checkin_at,checkout_at,remarks,location,task_type')
 			.eq('name', name)
 			.gte('date', monthStart)
 			.lt('date', monthEndExclusive)
@@ -104,6 +104,8 @@ export async function stampKintai(params: {
 	at: string;
 	workHours: number;
 	remarks: string;
+	location: string | null;
+	taskType: string | null;
 }): Promise<void> {
 	unwrap(
 		await supabase.rpc('stamp_kintai', {
@@ -112,7 +114,9 @@ export async function stampKintai(params: {
 			p_time: params.time,
 			p_at: params.at,
 			p_work_hours: params.workHours,
-			p_remarks: params.remarks
+			p_remarks: params.remarks,
+			p_location: params.location,
+			p_task_type: params.taskType
 		})
 	);
 }
@@ -138,6 +142,8 @@ export async function fixKintai(params: {
 	checkoutAt: string | null;
 	workHours: number;
 	remarks: string;
+	location: string | null;
+	taskType: string | null;
 }): Promise<void> {
 	unwrap(
 		await supabase.rpc('fix_kintai', {
@@ -148,7 +154,9 @@ export async function fixKintai(params: {
 			p_checkin_at: params.checkinAt,
 			p_checkout_at: params.checkoutAt,
 			p_work_hours: params.workHours,
-			p_remarks: params.remarks
+			p_remarks: params.remarks,
+			p_location: params.location,
+			p_task_type: params.taskType
 		})
 	);
 }
