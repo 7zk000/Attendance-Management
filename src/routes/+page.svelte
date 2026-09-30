@@ -77,10 +77,19 @@
 	let totalWorkDays = $derived(monthRecords.filter((row) => Number(row.work_hours) > 0).length);
 	let averageHours = $derived(totalWorkDays > 0 ? totalHours / totalWorkDays : 0);
 
+	let displayTime = $state('');
+
 	$effect(() => {
 		const options = reasonOptions;
 		attendanceKindValue =
 			todayRecord?.remarks && options.includes(todayRecord.remarks) ? todayRecord.remarks : options[0];
+	});
+
+	// The big time readout doubles as an input, so it can be set directly
+	// (e.g. entering a check-in time after arriving late/forgetting to punch)
+	// without going through the fix modal.
+	$effect(() => {
+		displayTime = (isCheckout ? todayRecord?.check_out : todayRecord?.check_in) || '';
 	});
 
 	async function refresh() {
@@ -143,6 +152,35 @@
 				: todayRecord?.work_hours || 0;
 
 		await stampKintai({ token: user.token, kind, time, at: now.toISOString(), workHours, remarks: reason });
+		await refresh();
+	}
+
+	async function handleInlineTimeChange(value: string) {
+		if (!user || !value) return;
+		const kind = actionKind;
+		const date = todayRecord?.date || toDateInputValue(new Date());
+		const reason = attendanceKindValue || (kind === 'checkout' ? '退勤' : '日勤');
+
+		const checkIn = kind === 'checkin' ? value : (todayRecord?.check_in ?? null);
+		const checkOut = kind === 'checkout' ? value : (todayRecord?.check_out ?? null);
+		const checkinAt =
+			kind === 'checkin' ? new Date(`${date}T${value}:00`).toISOString() : (todayRecord?.checkin_at ?? null);
+		const checkoutAt =
+			kind === 'checkout' ? new Date(`${date}T${value}:00`).toISOString() : (todayRecord?.checkout_at ?? null);
+		const workHours = resolveReasonWorkHours(reason, checkIn, checkOut);
+
+		await fixKintai({
+			token: user.token,
+			date,
+			checkIn,
+			checkOut,
+			checkinAt,
+			checkoutAt,
+			workHours,
+			remarks: reason
+		});
+
+		showToast('時刻を更新しました', 'success');
 		await refresh();
 	}
 
@@ -294,9 +332,15 @@
 				<div class="text-xs font-medium text-muted-foreground">{isCheckout ? '退勤' : '出勤'}</div>
 				<div class="text-xs text-muted-foreground">{toDateInputValue(new Date())}</div>
 			</div>
-			<div class="text-4xl font-bold {isComplete ? 'text-muted-foreground' : 'text-foreground'}">
-				{isCheckout ? todayRecord?.check_out || '--:--' : todayRecord?.check_in || '--:--'}
-			</div>
+			<Select
+				options={timeOptions}
+				bind:value={displayTime}
+				placeholder="--:--"
+				onChange={handleInlineTimeChange}
+				class="h-auto min-h-[4.5rem] px-4 text-center !text-4xl font-bold {isComplete
+					? 'text-muted-foreground'
+					: 'text-foreground'}"
+			/>
 			<Select options={reasonOptions.map((label) => ({ label, value: label }))} bind:value={attendanceKindValue} />
 			<Button
 				block
