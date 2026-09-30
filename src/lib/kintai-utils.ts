@@ -39,7 +39,14 @@ export function calcWorkHours(checkin: string | null | undefined, checkout: stri
 	}
 
 	const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-	return Math.max(0, diffHours);
+
+	// Excel転記スクリプト(app/fill_attendance.py)と同じ休憩ルール:
+	// 実働8時間超は一律1時間の休憩を控除する。
+	const BREAK_THRESHOLD_HOURS = 8;
+	const BREAK_HOURS = 1;
+	const workHours = diffHours > BREAK_THRESHOLD_HOURS ? diffHours - BREAK_HOURS : diffHours;
+
+	return Math.max(0, workHours);
 }
 
 export function resolveReasonWorkHours(
