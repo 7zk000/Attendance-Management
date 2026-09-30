@@ -51,6 +51,12 @@ export function calcWorkHours(checkin: string | null | undefined, checkout: stri
 	return Math.max(0, workHours);
 }
 
+// 実際に働く日(場所・作業内容の入力欄を表示する対象)。
+export const WORK_TYPE_REASONS = ['日勤', '夜勤', '午前休', '午後休'];
+
+// 時刻の記録が不要な休み(出勤/退勤の代わりに「確定する」で即日完了する)。
+export const NO_TIME_REASONS = ['病欠', '有給', '私用のため', '自社用のため'];
+
 export function resolveReasonWorkHours(
 	reason: string,
 	checkinValue: string | null | undefined,
@@ -63,7 +69,6 @@ export function resolveReasonWorkHours(
 		case '午後休':
 			return 4.5;
 		case '病欠':
-		case 'その他':
 		case '私用のため':
 		case '自社用のため':
 			return 0;
@@ -72,15 +77,10 @@ export function resolveReasonWorkHours(
 	}
 }
 
-export function getReasonOptions(kind: 'checkin' | 'checkout'): string[] {
-	if (kind === 'checkout') {
-		return ['退勤', '早退', 'その他'];
-	}
+// 出勤時に選べる理由の一覧。退勤時は理由を選ばない(remarksは出勤時の値を
+// そのまま保持する)ため、打刻修正モーダルもこの一覧を共用する。
+export function getReasonOptions(): string[] {
 	return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', '私用のため', '自社用のため'];
-}
-
-export function getFixReasonOptions(): string[] {
-	return [...new Set([...getReasonOptions('checkin'), ...getReasonOptions('checkout')])];
 }
 
 export function getLocationOptions(): string[] {

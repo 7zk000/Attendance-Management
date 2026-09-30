@@ -15,14 +15,15 @@
 		calcBusinessDays,
 		downloadCsv,
 		formatYmd,
-		getFixReasonOptions,
 		getLocationOptions,
 		getMonthLabel,
 		getReasonOptions,
 		getTaskTypeOptions,
 		getTodayLabel,
+		NO_TIME_REASONS,
 		resolveReasonWorkHours,
 		toDateInputValue,
+		WORK_TYPE_REASONS,
 		type KintaiRecord
 	} from '$lib/kintai-utils';
 	import {
@@ -39,7 +40,7 @@
 
 	const businessDays = calcBusinessDays();
 	const timeOptions = buildTimeOptions();
-	const fixReasonOptions = getFixReasonOptions().map((label) => ({ label, value: label }));
+	const fixReasonOptions = getReasonOptions().map((label) => ({ label, value: label }));
 	const locationOptions = getLocationOptions().map((label) => ({ label, value: label }));
 	const taskTypeOptions = getTaskTypeOptions().map((label) => ({ label, value: label }));
 	const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
@@ -55,7 +56,7 @@
 	let taskTypeValue = $state(getTaskTypeOptions()[0]);
 	let fixOpen = $state(false);
 	let fixDate = $state(toDateInputValue(new Date()));
-	let fixReason = $state(getFixReasonOptions()[0]);
+	let fixReason = $state(getReasonOptions()[0]);
 	let fixCheckin = $state('09:00');
 	let fixCheckout = $state('18:00');
 
@@ -73,19 +74,26 @@
 		toast = { isOpen: true, message, variant };
 	}
 
+	// 病欠・有給・私用のため・自社用のためは出勤/退勤を経由せず、
+	// 「確定する」一回の操作でその日の記録を完了させる(check_in/check_outはnullのまま)。
+	// そのため、この種の理由は todayRecord.remarks が付いた時点で「完了」とみなす。
+	let isNoTimeCompleted = $derived(
+		Boolean(todayRecord?.remarks) && NO_TIME_REASONS.includes(todayRecord?.remarks ?? '')
+	);
 	let isCheckout = $derived(Boolean(todayRecord?.check_in));
-	let isComplete = $derived(Boolean(todayRecord?.check_out));
+	let isComplete = $derived(Boolean(todayRecord?.check_out) || isNoTimeCompleted);
 	let actionKind = $derived<'checkin' | 'checkout'>(isCheckout ? 'checkout' : 'checkin');
-	let reasonOptions = $derived(getReasonOptions(actionKind));
-	let fixNoTimeRequired = $derived(fixReason === '病欠');
+	let reasonOptions = $derived(getReasonOptions());
+	let isGroupCReason = $derived(NO_TIME_REASONS.includes(attendanceKindValue));
+	let fixNoTimeRequired = $derived(NO_TIME_REASONS.includes(fixReason));
 
-	// 場所・作業内容は実際に働く日(日勤・夜勤)だけの入力項目。出勤時に選んだ
-	// 日勤/夜勤はチェックアウト側の理由選択肢(退勤/早退など)には無いので、
-	// 一度記録された場所・作業内容が残っているかどうかで「その日は実働日か」を判定する。
+	// 場所・作業内容は実際に働く日(日勤・夜勤・午前休・午後休)だけの入力項目。
+	// 退勤時は理由を選び直さない(remarksは出勤時の値を保持し続ける)ため、
+	// 一度記録された場所・作業内容が残っているかどうかで「その日は対象か」を判定する。
 	let showWorkDetails = $derived(
 		isCheckout
 			? Boolean(todayRecord?.location || todayRecord?.task_type)
-			: attendanceKindValue === '日勤' || attendanceKindValue === '夜勤'
+			: WORK_TYPE_REASONS.includes(attendanceKindValue)
 	);
 
 	let totalHours = $derived(monthRecords.reduce((sum, row) => sum + (Number(row.work_hours) || 0), 0));
@@ -129,6 +137,7 @@
 		fixDate = active?.date || toDateInputValue(new Date());
 		if (active?.check_in) fixCheckin = active.check_in;
 		if (active?.check_out) fixCheckout = active.check_out;
+		if (active?.remarks && reasonOptions.includes(active.remarks)) fixReason = active.remarks;
 	}
 
 	onMount(async () => {
@@ -159,12 +168,39 @@
 		loading = false;
 	});
 
+	async function handleConfirmNoTimeDay() {
+		if (!user) return;
+		const reason = attendanceKindValue;
+		const workHours = resolveReasonWorkHours(reason, null, null);
+
+		await fixKintai({
+			token: user.token,
+			date: toDateInputValue(new Date()),
+			checkIn: null,
+			checkOut: null,
+			checkinAt: null,
+			checkoutAt: null,
+			workHours,
+			remarks: reason,
+			location: null,
+			taskType: null
+		});
+		await refresh();
+	}
+
 	async function handleStamp() {
 		if (!user || isComplete) return;
+
+		if (!isCheckout && isGroupCReason) {
+			await handleConfirmNoTimeDay();
+			return;
+		}
+
 		const now = new Date();
 		const time = now.toTimeString().slice(0, 5);
 		const kind = actionKind;
-		const reason = attendanceKindValue || (kind === 'checkout' ? '退勤' : '日勤');
+		// 退勤時は理由を選び直さない。出勤時に決めた理由(remarks)をそのまま使う。
+		const reason = kind === 'checkin' ? attendanceKindValue : todayRecord?.remarks || '日勤';
 
 		const workHours =
 			kind === 'checkout'
@@ -195,7 +231,8 @@
 		if (!user || !value) return;
 		const kind = actionKind;
 		const date = todayRecord?.date || toDateInputValue(new Date());
-		const reason = attendanceKindValue || (kind === 'checkout' ? '退勤' : '日勤');
+		// 退勤時は理由を選び直さない。出勤時に決めた理由(remarks)をそのまま使う。
+		const reason = kind === 'checkin' ? attendanceKindValue : todayRecord?.remarks || '日勤';
 
 		const checkIn = kind === 'checkin' ? value : (todayRecord?.check_in ?? null);
 		const checkOut = kind === 'checkout' ? value : (todayRecord?.check_out ?? null);
@@ -368,36 +405,56 @@
 		</div>
 
 		<Card>
-			<div class="flex items-center justify-between">
-				<div class="text-xs font-medium text-muted-foreground">{isCheckout ? '退勤' : '出勤'}</div>
-				<div class="text-xs text-muted-foreground">{toDateInputValue(new Date())}</div>
-			</div>
-			<Select
-				options={timeOptions}
-				bind:value={displayTime}
-				placeholder="--:--"
-				onChange={handleInlineTimeChange}
-				class="h-auto min-h-[4.5rem] px-4 text-center !text-4xl font-bold {isComplete
-					? 'text-muted-foreground'
-					: 'text-foreground'}"
-			/>
-			<Select options={reasonOptions.map((label) => ({ label, value: label }))} bind:value={attendanceKindValue} />
-			{#if showWorkDetails}
-				<Select options={locationOptions} bind:value={locationValue} />
-				<Select options={taskTypeOptions} bind:value={taskTypeValue} />
+			{#if isNoTimeCompleted}
+				<div class="flex items-center justify-between">
+					<div class="text-xs font-medium text-muted-foreground">本日の記録</div>
+					<div class="text-xs text-muted-foreground">{toDateInputValue(new Date())}</div>
+				</div>
+				<div class="text-4xl font-bold text-muted-foreground">{todayRecord?.remarks}</div>
+				<div class="text-sm text-muted-foreground">
+					稼働時間: {(Number(todayRecord?.work_hours) || 0).toFixed(1)}h
+				</div>
+				<Button block size="large" variant="success" disabled>確定済み</Button>
+				<Button block variant="secondary" onclick={() => (fixOpen = true)}>記録を修正する</Button>
+			{:else}
+				<div class="flex items-center justify-between">
+					<div class="text-xs font-medium text-muted-foreground">{isCheckout ? '退勤' : '出勤'}</div>
+					<div class="text-xs text-muted-foreground">{toDateInputValue(new Date())}</div>
+				</div>
+				<Select
+					options={timeOptions}
+					bind:value={displayTime}
+					placeholder="--:--"
+					onChange={handleInlineTimeChange}
+					class="h-auto min-h-[4.5rem] px-4 text-center !text-4xl font-bold {isComplete
+						? 'text-muted-foreground'
+						: 'text-foreground'}"
+				/>
+				{#if !isCheckout}
+					<Select
+						options={reasonOptions.map((label) => ({ label, value: label }))}
+						bind:value={attendanceKindValue}
+					/>
+				{:else}
+					<div class="text-xs text-muted-foreground">理由: {todayRecord?.remarks || '-'}</div>
+				{/if}
+				{#if showWorkDetails}
+					<Select options={locationOptions} bind:value={locationValue} />
+					<Select options={taskTypeOptions} bind:value={taskTypeValue} />
+				{/if}
+				<Button
+					block
+					size="large"
+					variant={isCheckout ? 'warning' : 'success'}
+					disabled={isComplete}
+					onclick={handleStamp}
+				>
+					{isComplete ? '退勤済み' : isCheckout ? '退勤する' : isGroupCReason ? '確定する' : '出勤する'}
+				</Button>
+				<Button block variant="secondary" onclick={() => (fixOpen = true)}>
+					{isCheckout ? '退勤時間を修正する' : '出勤時間を修正する'}
+				</Button>
 			{/if}
-			<Button
-				block
-				size="large"
-				variant={isCheckout ? 'warning' : 'success'}
-				disabled={isComplete}
-				onclick={handleStamp}
-			>
-				{isComplete ? '退勤済み' : isCheckout ? '退勤する' : '出勤する'}
-			</Button>
-			<Button block variant="secondary" onclick={() => (fixOpen = true)}>
-				{isCheckout ? '退勤時間を修正する' : '出勤時間を修正する'}
-			</Button>
 		</Card>
 
 		<Card>
