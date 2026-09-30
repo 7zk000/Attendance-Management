@@ -64,6 +64,8 @@ export function resolveReasonWorkHours(
 			return 4.5;
 		case '病欠':
 		case 'その他':
+		case '私用のため':
+		case '自社用のため':
 			return 0;
 		default:
 			return calcWorkHours(checkinValue, checkoutValue);
@@ -74,11 +76,11 @@ export function getReasonOptions(kind: 'checkin' | 'checkout'): string[] {
 	if (kind === 'checkout') {
 		return ['退勤', '早退', 'その他'];
 	}
-	return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', 'その他'];
+	return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', '私用のため', '自社用のため'];
 }
 
 export function getFixReasonOptions(): string[] {
-	return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', '退勤', '早退', 'その他'];
+	return [...new Set([...getReasonOptions('checkin'), ...getReasonOptions('checkout')])];
 }
 
 export function getLocationOptions(): string[] {
