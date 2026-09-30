@@ -20,7 +20,6 @@
 		totalHours: number;
 		workDays: number;
 		sickDays: number;
-		earlyLeaveDays: number;
 		avgHours: number;
 		remainingTo200: number;
 	};
@@ -102,10 +101,9 @@
 				const totalHours = records.reduce((sum, r) => sum + (Number(r.work_hours) || 0), 0);
 				const workDays = records.filter((r) => Number(r.work_hours) > 0).length;
 				const sickDays = records.filter((r) => r.remarks === '病欠').length;
-				const earlyLeaveDays = records.filter((r) => r.remarks === '早退').length;
 				const avgHours = workDays > 0 ? totalHours / workDays : 0;
 				const remainingTo200 = Math.max(0, 200 - totalHours);
-				rows.push({ name, totalHours, workDays, sickDays, earlyLeaveDays, avgHours, remainingTo200 });
+				rows.push({ name, totalHours, workDays, sickDays, avgHours, remainingTo200 });
 			}
 			summaryRows = rows.sort((a, b) => b.totalHours - a.totalHours);
 		} catch (error) {
@@ -224,7 +222,6 @@
 								<TableHead size="small">稼働時間</TableHead>
 								<TableHead size="small">出勤日数</TableHead>
 								<TableHead size="small">病欠数</TableHead>
-								<TableHead size="small">早退数</TableHead>
 								<TableHead size="small">平均稼働時間</TableHead>
 								<TableHead size="small">200hまで残り</TableHead>
 								<TableHead size="small">勤怠一覧</TableHead>
@@ -240,7 +237,6 @@
 									>
 									<TableData size="small">{row.workDays}日</TableData>
 									<TableData size="small">{row.sickDays}日</TableData>
-									<TableData size="small">{row.earlyLeaveDays}日</TableData>
 									<TableData size="small">{formatHours(row.avgHours)}</TableData>
 									<TableData size="small">{formatRemainingHours(row.remainingTo200)}</TableData>
 									<TableData size="small">

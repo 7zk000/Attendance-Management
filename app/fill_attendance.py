@@ -157,15 +157,21 @@ def replace_cell_inplace_text(xml: str, cell_ref: str, text) -> str:
     return xml
 
 
+HALF_DAY_LEAVE_REASONS = {'午前休', '午後休'}
+
+
 def build_work_content_text(location, task_type, remarks):
     """L列(作業内容、勤怠等)に書き込むテキストを組み立てる。
-    日勤・夜勤で場所・作業内容が記録されている日は「【場所】作業内容」、
-    有給・私用のためなどの休み理由の日は理由名をそのまま表示する。
+    - 日勤・夜勤で場所・作業内容が記録されている日は「【場所】作業内容」
+    - 午前休・午後休(場所・作業内容が記録されている)は「【場所】作業内容・午前休」のように休暇種別を付記
+    - 病欠・有給・私用のため・自社用のためなど、時刻を記録しない休みの日はremarksをそのまま表示
     """
     location = (location or '').strip()
     task_type = (task_type or '').strip()
     remarks = (remarks or '').strip()
 
+    if remarks in HALF_DAY_LEAVE_REASONS and (location or task_type):
+        return f"{location}{task_type}・{remarks}"
     if location or task_type:
         return f"{location}{task_type}"
     if remarks:
@@ -219,9 +225,19 @@ def edit_xml_and_save(source_path: str, output_path: str,
         e_time = row_data['end_time']
         b_time = row_data['break_time']
 
-        sheet_xml = replace_cell_inplace(sheet_xml, f'G{r}', time_to_excel(s_time))
-        sheet_xml = replace_cell_inplace(sheet_xml, f'H{r}', time_to_excel(e_time))
-        sheet_xml = replace_cell_inplace(sheet_xml, f'I{r}', time_to_excel(b_time))
+        # 病欠・有給など時刻を記録しない休みの日はG,H,Iを空欄のままにする
+        # (総労働時間・出社日数の集計はG,H,I由来のため、時刻を入れると
+        # 実際には働いていない日が稼働扱いになってしまう)。
+        if s_time is not None and e_time is not None:
+            sheet_xml = replace_cell_inplace(sheet_xml, f'G{r}', time_to_excel(s_time))
+            sheet_xml = replace_cell_inplace(sheet_xml, f'H{r}', time_to_excel(e_time))
+            sheet_xml = replace_cell_inplace(sheet_xml, f'I{r}', time_to_excel(b_time))
+
+            # 数式のキャッシュ値を直接計算して書き込む
+            vals = calc_row(s_time, e_time, b_time)
+            for col, val in vals.items():
+                if val != "":
+                    sheet_xml = replace_cell_value_only(sheet_xml, f'{col}{r}', val)
 
         # L列(作業内容、勤怠等。L:Mは結合セルのためLにだけ書き込む)
         l_text = build_work_content_text(
@@ -229,12 +245,6 @@ def edit_xml_and_save(source_path: str, output_path: str,
         )
         if l_text:
             sheet_xml = replace_cell_inplace_text(sheet_xml, f'L{r}', l_text)
-
-        # 数式のキャッシュ値を直接計算して書き込む
-        vals = calc_row(s_time, e_time, b_time)
-        for col, val in vals.items():
-            if val != "":
-                sheet_xml = replace_cell_value_only(sheet_xml, f'{col}{r}', val)
 
         count += 1
 
@@ -298,10 +308,15 @@ def fetch_sheet_rows(year: int, month: int) -> list:
     rows = []
     for r in records:
         date_str     = r.get("date", "")
-        checkin_str  = r.get("check_in", "")
-        checkout_str = r.get("check_out", "")
+        checkin_str  = r.get("check_in") or ""
+        checkout_str = r.get("check_out") or ""
+        remarks      = r.get("remarks") or ""
 
-        if not date_str or not checkin_str or not checkout_str:
+        if not date_str:
+            continue
+        # 病欠・有給など時刻を記録しない休みの日はcheck_in/check_outが無いが、
+        # remarksだけでもL列に表示するため行として残す。
+        if not checkin_str and not checkout_str and not remarks:
             continue
 
         try:
@@ -312,23 +327,29 @@ def fetch_sheet_rows(year: int, month: int) -> list:
         if dt.year != year or dt.month != month:
             continue
 
-        start = parse_time(checkin_str)
-        end   = parse_time(checkout_str)
-        ci = start.hour * 60 + start.minute
-        co = end.hour * 60 + end.minute
-        if co <= ci:
-            co += 1440  # 夜勤対応
-        diff_mins = co - ci
-        break_hours = 1 if diff_mins > 480 else 0
+        if checkin_str and checkout_str:
+            start = parse_time(checkin_str)
+            end   = parse_time(checkout_str)
+            ci = start.hour * 60 + start.minute
+            co = end.hour * 60 + end.minute
+            if co <= ci:
+                co += 1440  # 夜勤対応
+            diff_mins = co - ci
+            break_hours = 1 if diff_mins > 480 else 0
+            break_time = datetime.time(break_hours, 0)
+        else:
+            start = None
+            end = None
+            break_time = None
 
         rows.append({
             "day":        dt.day,
             "start_time": start,
             "end_time":   end,
-            "break_time": datetime.time(break_hours, 0),
+            "break_time": break_time,
             "location":   r.get("location"),
             "task_type":  r.get("task_type"),
-            "remarks":    r.get("remarks"),
+            "remarks":    remarks,
         })
 
     return rows
