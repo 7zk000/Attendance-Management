@@ -56,7 +56,15 @@
 
 	let loadingDetail = $state(true);
 	let detailRecords = $state<
-		{ date: string; check_in: string | null; check_out: string | null; work_hours: number; remarks: string | null }[]
+		{
+			date: string;
+			check_in: string | null;
+			check_out: string | null;
+			work_hours: number;
+			remarks: string | null;
+			location?: string | null;
+			task_type?: string | null;
+		}[]
 	>([]);
 	let detailFailed = $state(false);
 
@@ -266,7 +274,7 @@
 				{:else if detailRecords.length === 0}
 					<div class="py-6 text-center text-sm text-muted-foreground">この月の勤怠データがありません。</div>
 				{:else}
-					<Table class="min-w-[480px]">
+					<Table class="min-w-[640px]">
 						<thead>
 							<tr>
 								<TableHead size="small">日付</TableHead>
@@ -274,6 +282,8 @@
 								<TableHead size="small">退勤時刻</TableHead>
 								<TableHead size="small">稼働時間</TableHead>
 								<TableHead size="small">理由</TableHead>
+								<TableHead size="small">場所</TableHead>
+								<TableHead size="small">作業内容</TableHead>
 							</tr>
 						</thead>
 						<tbody>
@@ -284,6 +294,8 @@
 									<TableData size="small">{record.check_out || '--:--'}</TableData>
 									<TableData size="small">{formatHours(record.work_hours)}</TableData>
 									<TableData size="small">{record.remarks || '-'}</TableData>
+									<TableData size="small">{record.location || '-'}</TableData>
+									<TableData size="small">{record.task_type || '-'}</TableData>
 								</tr>
 							{/each}
 						</tbody>

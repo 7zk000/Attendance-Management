@@ -8,6 +8,8 @@ export type KintaiRecord = {
 	checkout_at?: string | null;
 	work_hours: number;
 	remarks: string | null;
+	location?: string | null;
+	task_type?: string | null;
 };
 
 export function calcWorkHours(checkin: string | null | undefined, checkout: string | null | undefined): number {
@@ -77,6 +79,14 @@ export function getReasonOptions(kind: 'checkin' | 'checkout'): string[] {
 
 export function getFixReasonOptions(): string[] {
 	return ['日勤', '夜勤', '病欠', '有給', '午前休', '午後休', '退勤', '早退', 'その他'];
+}
+
+export function getLocationOptions(): string[] {
+	return ['【多摩】', '【自宅】'];
+}
+
+export function getTaskTypeOptions(): string[] {
+	return ['作業', 'ドキュメント整理・手順作成など'];
 }
 
 export function buildTimeOptions(): { label: string; value: string }[] {
@@ -171,7 +181,7 @@ function csvEscapeCell(value: unknown): string {
 }
 
 export function buildMonthCsv(records: KintaiRecord[]): string {
-	const header = ['日付', '出勤時刻', '退勤時刻', '稼働時間(h)', '理由'];
+	const header = ['日付', '出勤時刻', '退勤時刻', '稼働時間(h)', '理由', '場所', '作業内容'];
 	const lines = [header.map(csvEscapeCell).join(',')];
 
 	records.forEach((row) => {
@@ -181,7 +191,9 @@ export function buildMonthCsv(records: KintaiRecord[]): string {
 				row.check_in || '',
 				row.check_out || '',
 				(Number(row.work_hours) || 0).toFixed(1),
-				row.remarks || ''
+				row.remarks || '',
+				row.location || '',
+				row.task_type || ''
 			]
 				.map(csvEscapeCell)
 				.join(',')
