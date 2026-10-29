@@ -159,6 +159,8 @@ def replace_cell_inplace_text(xml: str, cell_ref: str, text) -> str:
 
 
 HALF_DAY_LEAVE_REASONS = {'午前休', '午後休'}
+# 時刻を記録しない休み(src/lib/kintai-utils.ts の NO_TIME_REASONS と揃える)
+NO_TIME_REASONS = {'病欠', '有給', '私用のため', '自社用のため'}
 
 
 def build_work_content_text(location, task_type, remarks):
@@ -171,6 +173,10 @@ def build_work_content_text(location, task_type, remarks):
     task_type = (task_type or '').strip()
     remarks = (remarks or '').strip()
 
+    # 休みの日は場所・作業内容が残っていても理由を優先する
+    # (出勤済みの日を後から休みに修正した場合など)
+    if remarks in NO_TIME_REASONS:
+        return remarks
     if remarks in HALF_DAY_LEAVE_REASONS and (location or task_type):
         return f"{location}{task_type}・{remarks}"
     if location or task_type:
