@@ -12,43 +12,26 @@ export type KintaiRecord = {
 	task_type?: string | null;
 };
 
+// "HH:MM" 同士から稼働時間(h)を計算する。Excel転記スクリプト(app/fill_attendance.py)と
+// 同じルールにしている:
+// - 退勤が出勤以前(同時刻含む)なら日をまたいだ夜勤とみなす
+// - 拘束8時間超は一律1時間の休憩を控除する
+// - 30分未満は切り捨てる
 export function calcWorkHours(checkin: string | null | undefined, checkout: string | null | undefined): number {
-	if (!checkin || !checkout) return 0;
-
-	const isTimeOnly = (value: string) => value.includes(':') && value.split(':').length === 2;
-
-	const parseValue = (value: string) => {
-		if (!value) return null;
-		if (isTimeOnly(value)) {
-			const [hours, minutes] = value.split(':').map(Number);
-			const base = new Date();
-			base.setHours(hours, minutes, 0, 0);
-			return base;
-		}
-		const date = new Date(value);
-		return Number.isNaN(date.getTime()) ? null : date;
+	const toMinutes = (value: string | null | undefined) => {
+		const match = /^(\d{1,2}):(\d{2})$/.exec(value ?? '');
+		return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 	};
 
-	const start = parseValue(checkin);
-	const end = parseValue(checkout);
-	if (!start || !end) return 0;
+	const start = toMinutes(checkin);
+	const end = toMinutes(checkout);
+	if (start === null || end === null) return 0;
 
-	// "HH:MM"-only values carry no date, so a night shift (e.g. 22:00 -> 06:00)
-	// naively diffs negative. Since both values share today's date in that case,
-	// treat an end time earlier than the start time as spilling into the next day.
-	if (isTimeOnly(checkin) && isTimeOnly(checkout) && end.getTime() < start.getTime()) {
-		end.setDate(end.getDate() + 1);
-	}
+	const spanMinutes = end > start ? end - start : end + 24 * 60 - start;
+	const breakMinutes = spanMinutes > 8 * 60 ? 60 : 0;
+	const workMinutes = Math.max(0, spanMinutes - breakMinutes);
 
-	const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-
-	// Excel転記スクリプト(app/fill_attendance.py)と同じ休憩ルール:
-	// 実働8時間超は一律1時間の休憩を控除する。
-	const BREAK_THRESHOLD_HOURS = 8;
-	const BREAK_HOURS = 1;
-	const workHours = diffHours > BREAK_THRESHOLD_HOURS ? diffHours - BREAK_HOURS : diffHours;
-
-	return Math.max(0, workHours);
+	return (Math.floor(workMinutes / 30) * 30) / 60;
 }
 
 // 実際に働く日(場所・作業内容の入力欄を表示する対象)。
@@ -89,8 +72,18 @@ export function isMissingCheckout(record: Pick<KintaiRecord, 'check_in' | 'check
 	return Boolean(record.check_in) && !record.check_out;
 }
 
-// "YYYY-MM-DD" と "HH:MM" からタイムスタンプ(ISO)を作る。afterTime より前(同時刻含む)の
-// 時刻は日をまたいだ夜勤の退勤とみなして翌日扱いにする。
+// 退勤が入っていない記録のうち、もう勤務中ではありえないもの(=退勤し忘れ)。
+// 今日の出勤と、昨日出勤した夜勤(日付をまたいで勤務中)だけはまだ勤務中として扱う。
+export function isOverdueCheckout(record: Pick<KintaiRecord, 'date' | 'check_in' | 'check_out' | 'remarks'>): boolean {
+	if (!isMissingCheckout(record)) return false;
+	const today = toDateInputValue(new Date());
+	const yesterday = toDateInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
+	if (record.date >= today) return false;
+	return !(record.date === yesterday && record.remarks === '夜勤');
+}
+
+// "YYYY-MM-DD" と "HH:MM" からタイムスタンプ(ISO)を作る。afterTime 以前(同時刻含む)の
+// 時刻は日をまたいだ夜勤の退勤とみなして翌日扱いにする(calcWorkHoursと同じ基準)。
 export function toTimestamp(date: string, time: string, afterTime?: string | null): string {
 	const value = new Date(`${date}T${time}:00`);
 	if (afterTime && time <= afterTime) value.setDate(value.getDate() + 1);

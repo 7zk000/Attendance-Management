@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { toDateInputValue, type KintaiRecord } from './kintai-utils';
+import { isMissingCheckout, isOverdueCheckout, toDateInputValue, type KintaiRecord } from './kintai-utils';
 
 export type KintaiUser = {
 	id: number;
@@ -46,14 +46,12 @@ export async function getRecordForDate(name: string, date: string): Promise<Kint
 	return rows && rows.length ? rows[0] : null;
 }
 
-export async function getTodayRecord(name: string): Promise<KintaiRecord | null> {
-	return getRecordForDate(name, toDateInputValue(new Date()));
-}
-
 // A night shift (夜勤) checks in before midnight and checks out after it, so
 // "today's" record can actually still be filed under yesterday's date once the
 // date rolls over. Prefer an unfinished shift (checked in, not yet checked out)
-// from today or yesterday over strictly looking up today's row.
+// from today or yesterday over strictly looking up today's row. Yesterday's
+// unfinished day shift is a forgotten checkout, not an active shift, so it is
+// left out (otherwise it would block today's check-in).
 export async function getActiveRecord(name: string): Promise<KintaiRecord | null> {
 	const today = toDateInputValue(new Date());
 	const yesterday = toDateInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
@@ -69,7 +67,7 @@ export async function getActiveRecord(name: string): Promise<KintaiRecord | null
 
 	if (!rows || !rows.length) return null;
 
-	const openShift = rows.find((row) => row.check_in && !row.check_out);
+	const openShift = rows.find((row) => isMissingCheckout(row) && !isOverdueCheckout(row));
 	if (openShift) return openShift;
 
 	return rows.find((row) => row.date === today) || null;

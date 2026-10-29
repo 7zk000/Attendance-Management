@@ -20,7 +20,7 @@
 		getMonthLabel,
 		getReasonOptions,
 		getTodayLabel,
-		isMissingCheckout,
+		isOverdueCheckout,
 		lastUsedValue,
 		NO_TIME_REASONS,
 		resolveReasonWorkHours,
@@ -43,7 +43,6 @@
 
 	const today = new Date();
 	const businessDays = getBusinessDayStats(today.getFullYear(), today.getMonth() + 1);
-	const fixReasonOptions = getReasonOptions().map((label) => ({ label, value: label }));
 	const weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
 	let loading = $state(true);
@@ -65,7 +64,9 @@
 	let fixLocation = $state('');
 	let fixTaskType = $state('');
 	let fixExisting = $state<KintaiRecord | null>(null);
+	let fixLoadFailed = $state(false);
 	let fixRequestId = 0;
+	let stamping = $state(false);
 
 	let deleteOpen = $state(false);
 	let deleteDate = $state('');
@@ -94,6 +95,14 @@
 	let isGroupCReason = $derived(NO_TIME_REASONS.includes(attendanceKindValue));
 	let fixNoTimeRequired = $derived(NO_TIME_REASONS.includes(fixReason));
 	let fixShowWorkDetails = $derived(WORK_TYPE_REASONS.includes(fixReason));
+	// 以前の打刻フローで記録された理由(早退など)は今の選択肢に無いが、修正時に
+	// 勝手に書き換えないよう選択肢に加えて残す。
+	let fixReasonOptions = $derived(
+		[...getReasonOptions(), ...(getReasonOptions().includes(fixReason) ? [] : [fixReason])].map((label) => ({
+			label,
+			value: label
+		}))
+	);
 
 	// 場所・作業内容は実際に働く日(日勤・夜勤・午前休・午後休)だけの入力項目。
 	// 退勤時は理由を選び直さないので、出勤時に記録した理由で判定する。
@@ -111,9 +120,7 @@
 	let averageHours = $derived(totalWorkDays > 0 ? totalHours / totalWorkDays : 0);
 
 	// 退勤し忘れた日(いま勤務中の記録は除く)。
-	let missingCheckoutDates = $derived(
-		monthRecords.filter((row) => isMissingCheckout(row) && row.date !== todayRecord?.date).map((row) => row.date)
-	);
+	let missingCheckoutDates = $derived(monthRecords.filter(isOverdueCheckout).map((row) => row.date));
 
 	$effect(() => {
 		const options = reasonOptions;
@@ -172,7 +179,22 @@
 		loading = false;
 	});
 
-	async function handleConfirmNoTimeDay() {
+	// 打刻系の操作を1つずつ実行し、失敗したらトーストで知らせる(連打・通信失敗の対策)。
+	async function runStamp(action: () => Promise<void>) {
+		if (stamping) return;
+		stamping = true;
+		try {
+			await action();
+		} catch (error) {
+			console.error('stamp failed:', error);
+			showToast('記録に失敗しました。通信状況を確認して、もう一度お試しください', 'danger');
+		} finally {
+			stamping = false;
+		}
+		await refresh().catch((error) => console.error('refresh failed:', error));
+	}
+
+	async function confirmNoTimeDay() {
 		if (!user) return;
 		const reason = attendanceKindValue;
 
@@ -188,16 +210,15 @@
 			location: null,
 			taskType: null
 		});
-		await refresh();
 	}
 
-	async function handleStamp() {
+	function handleStamp() {
 		if (!user || isComplete) return;
+		return runStamp(!isCheckout && isGroupCReason ? confirmNoTimeDay : stamp);
+	}
 
-		if (!isCheckout && isGroupCReason) {
-			await handleConfirmNoTimeDay();
-			return;
-		}
+	async function stamp() {
+		if (!user) return;
 
 		const now = new Date();
 		const time = now.toTimeString().slice(0, 5);
@@ -218,12 +239,21 @@
 			location: showWorkDetails ? locationValue || null : null,
 			taskType: showWorkDetails ? taskTypeValue || null : null
 		});
-		await refresh();
 	}
 
 	async function handleInlineTimeChange(value: string) {
 		if (!user || !value) return;
 		const kind = actionKind;
+		if (kind === 'checkout' && value === todayRecord?.check_in) {
+			showToast('出勤と退勤を同じ時刻にはできません', 'danger');
+			displayTime = todayRecord?.check_out || '';
+			return;
+		}
+		await runStamp(() => saveInlineTime(kind, value));
+	}
+
+	async function saveInlineTime(kind: 'checkin' | 'checkout', value: string) {
+		if (!user) return;
 		const date = todayRecord?.date || toDateInputValue(new Date());
 		// 退勤時は理由を選び直さない。出勤時に決めた理由(remarks)をそのまま使う。
 		const reason = kind === 'checkin' ? attendanceKindValue : todayRecord?.remarks || '日勤';
@@ -247,7 +277,6 @@
 		});
 
 		showToast('時刻を更新しました', 'success');
-		await refresh();
 	}
 
 	// 修正モーダルは選んだ日付の記録を読み込んで、その内容を編集する。
@@ -255,17 +284,22 @@
 		if (!user || !date) return;
 		const requestId = ++fixRequestId;
 		fixLoading = true;
+		fixLoadFailed = false;
 		try {
 			const record = await getRecordForDate(user.name, date);
 			if (requestId !== fixRequestId) return;
 			fixExisting = record;
-			fixReason = record?.remarks && getReasonOptions().includes(record.remarks) ? record.remarks : '日勤';
+			fixReason = record?.remarks || '日勤';
 			fixCheckin = record?.check_in || '09:00';
 			fixCheckout = record ? record.check_out || '' : '18:00';
 			fixLocation = record ? (record.location ?? '') : lastUsedValue(monthRecords, 'location');
 			fixTaskType = record ? (record.task_type ?? '') : lastUsedValue(monthRecords, 'task_type');
 		} catch (error) {
+			if (requestId !== fixRequestId) return;
 			console.error('getRecordForDate failed:', error);
+			// 前の日付の内容のまま保存されないよう、読み込み直すまで送信できなくする。
+			fixExisting = null;
+			fixLoadFailed = true;
 			showToast('記録の読み込みに失敗しました', 'danger');
 		} finally {
 			if (requestId === fixRequestId) fixLoading = false;
@@ -281,9 +315,13 @@
 	}
 
 	async function submitFix() {
-		if (!user || fixLoading) return;
+		if (!user || fixLoading || fixLoadFailed) return;
 		if (!fixDate || (!fixNoTimeRequired && !fixCheckin)) {
 			showToast('日付と出勤時間を入力してください', 'danger');
+			return;
+		}
+		if (!fixNoTimeRequired && fixCheckout === fixCheckin) {
+			showToast('出勤と退勤を同じ時刻にはできません', 'danger');
 			return;
 		}
 
@@ -489,7 +527,7 @@
 					block
 					size="large"
 					variant={isCheckout ? 'warning' : 'success'}
-					disabled={isComplete}
+					disabled={isComplete || stamping}
 					onclick={handleStamp}
 				>
 					{isComplete ? '退勤済み' : isCheckout ? '退勤する' : isGroupCReason ? '確定する' : '出勤する'}
@@ -519,10 +557,8 @@
 									{:else}
 										<div>
 											{row.check_in || '--:--'} →
-											<span
-												class={isMissingCheckout(row) && row.date !== todayRecord?.date
-													? 'font-semibold text-warning'
-													: ''}>{row.check_out || '--:--'}</span
+											<span class={isOverdueCheckout(row) ? 'font-semibold text-warning' : ''}
+												>{row.check_out || '--:--'}</span
 											>
 										</div>
 										<div class="mt-0.5 truncate text-xs text-muted-foreground/70">
@@ -562,7 +598,13 @@
 			<Label for="fix-date">日付</Label>
 			<Input id="fix-date" type="date" bind:value={fixDate} onchange={() => loadFixRecord(fixDate)} />
 			<p class="mt-1 text-xs text-muted-foreground">
-				{fixLoading ? '読み込み中...' : fixExisting ? 'この日の記録を修正します' : 'この日の記録はまだありません(新規作成)'}
+				{fixLoading
+					? '読み込み中...'
+					: fixLoadFailed
+						? '読み込みに失敗しました。日付を選び直してください'
+						: fixExisting
+							? 'この日の記録を修正します'
+							: 'この日の記録はまだありません(新規作成)'}
 			</p>
 		</div>
 		<div>
@@ -585,7 +627,7 @@
 				<WorkDetailsFields bind:location={fixLocation} bind:taskType={fixTaskType} />
 			</div>
 		{/if}
-		<Button block disabled={fixLoading} onclick={submitFix}>修正を送信</Button>
+		<Button block disabled={fixLoading || fixLoadFailed} onclick={submitFix}>修正を送信</Button>
 		{#if fixExisting}
 			<Button block variant="danger" disabled={fixLoading} onclick={() => askDelete(fixDate)}>
 				この日の記録を削除
