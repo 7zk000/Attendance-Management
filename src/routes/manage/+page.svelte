@@ -11,7 +11,15 @@
 	import Table from '$lib/components/ui/table/Table.svelte';
 	import TableHead from '$lib/components/ui/table/TableHead.svelte';
 	import TableData from '$lib/components/ui/table/TableData.svelte';
-	import { formatHours, formatRemainingHours, toDateInputValue, getBusinessDayStats } from '$lib/kintai-utils';
+	import {
+		countedWorkHours,
+		formatHours,
+		formatRemainingHours,
+		getBusinessDayStats,
+		isMissingCheckout,
+		NO_TIME_REASONS,
+		toDateInputValue
+	} from '$lib/kintai-utils';
 	import { getMonthRecords, listUserNames } from '$lib/api';
 	import { isAdminLoggedIn, setAdminLoggedIn } from '$lib/session';
 
@@ -19,10 +27,23 @@
 		name: string;
 		totalHours: number;
 		workDays: number;
-		sickDays: number;
+		leaveDays: Record<string, number>;
+		missingCheckoutDays: number;
 		avgHours: number;
 		remainingTo200: number;
 	};
+
+	// 休みの種類ごとの日数を表示する列(見出しは短縮名)。
+	const LEAVE_COLUMNS: { reason: string; label: string }[] = NO_TIME_REASONS.map((reason) => ({
+		reason,
+		label: reason.replace(/のため$/, '')
+	}));
+
+	// 昨日以降に出勤した記録は夜勤を含めてまだ勤務中の可能性があるので、退勤漏れとは数えない。
+	function isOverdueCheckout(record: { date: string; check_in: string | null; check_out: string | null }) {
+		const yesterday = toDateInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
+		return isMissingCheckout(record) && record.date < yesterday;
+	}
 
 	function formatMonthInputValue(date: Date) {
 		return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -98,12 +119,15 @@
 			const rows: SummaryRow[] = [];
 			for (const name of names) {
 				const records = await getMonthRecords(name, monthStart, monthEnd);
-				const totalHours = records.reduce((sum, r) => sum + (Number(r.work_hours) || 0), 0);
-				const workDays = records.filter((r) => Number(r.work_hours) > 0).length;
-				const sickDays = records.filter((r) => r.remarks === '病欠').length;
+				const totalHours = records.reduce((sum, r) => sum + countedWorkHours(r), 0);
+				const workDays = records.filter((r) => countedWorkHours(r) > 0).length;
+				const leaveDays = Object.fromEntries(
+					NO_TIME_REASONS.map((reason) => [reason, records.filter((r) => r.remarks === reason).length])
+				);
+				const missingCheckoutDays = records.filter(isOverdueCheckout).length;
 				const avgHours = workDays > 0 ? totalHours / workDays : 0;
 				const remainingTo200 = Math.max(0, 200 - totalHours);
-				rows.push({ name, totalHours, workDays, sickDays, avgHours, remainingTo200 });
+				rows.push({ name, totalHours, workDays, leaveDays, missingCheckoutDays, avgHours, remainingTo200 });
 			}
 			summaryRows = rows.sort((a, b) => b.totalHours - a.totalHours);
 		} catch (error) {
@@ -195,11 +219,11 @@
 				<div class="mt-1 text-xl font-bold text-foreground">{currentMonthText(monthValue)}</div>
 			</Card>
 			<Card class="p-4">
-				<div class="text-xs text-muted-foreground">今月の営業日</div>
+				<div class="text-xs text-muted-foreground">対象月の営業日</div>
 				<div class="mt-1 text-xl font-bold text-foreground">{businessStats.total}日</div>
 			</Card>
 			<Card class="p-4">
-				<div class="text-xs text-muted-foreground">残りの営業日</div>
+				<div class="text-xs text-muted-foreground">残りの営業日(今日を含む)</div>
 				<div class="mt-1 text-xl font-bold text-warning">{businessStats.remaining}日</div>
 			</Card>
 		</div>
@@ -214,14 +238,17 @@
 				{:else if summaryRows.length === 0}
 					<div class="py-6 text-center text-sm text-muted-foreground">登録されているユーザーがありません。</div>
 				{:else}
-					<Table class="min-w-[760px]">
+					<Table class="min-w-[980px]">
 						<thead>
 							<tr>
 								<TableHead size="small">No</TableHead>
 								<TableHead size="small">ユーザ名</TableHead>
 								<TableHead size="small">稼働時間</TableHead>
 								<TableHead size="small">出勤日数</TableHead>
-								<TableHead size="small">病欠数</TableHead>
+								{#each LEAVE_COLUMNS as column (column.reason)}
+									<TableHead size="small">{column.label}</TableHead>
+								{/each}
+								<TableHead size="small">退勤漏れ</TableHead>
 								<TableHead size="small">平均稼働時間</TableHead>
 								<TableHead size="small">200hまで残り</TableHead>
 								<TableHead size="small">勤怠一覧</TableHead>
@@ -236,7 +263,14 @@
 										>{formatHours(row.totalHours)}</TableData
 									>
 									<TableData size="small">{row.workDays}日</TableData>
-									<TableData size="small">{row.sickDays}日</TableData>
+									{#each LEAVE_COLUMNS as column (column.reason)}
+										<TableData size="small">{row.leaveDays[column.reason]}日</TableData>
+									{/each}
+									<TableData
+										size="small"
+										class={row.missingCheckoutDays > 0 ? 'font-semibold text-warning' : ''}
+										>{row.missingCheckoutDays}件</TableData
+									>
 									<TableData size="small">{formatHours(row.avgHours)}</TableData>
 									<TableData size="small">{formatRemainingHours(row.remainingTo200)}</TableData>
 									<TableData size="small">
@@ -284,11 +318,11 @@
 						</thead>
 						<tbody>
 							{#each detailRecords as record (record.date)}
-								<tr>
+								<tr class={isOverdueCheckout(record) ? 'bg-warning/10' : ''}>
 									<TableData size="small">{record.date || '-'}</TableData>
 									<TableData size="small">{record.check_in || '--:--'}</TableData>
 									<TableData size="small">{record.check_out || '--:--'}</TableData>
-									<TableData size="small">{formatHours(record.work_hours)}</TableData>
+									<TableData size="small">{formatHours(countedWorkHours(record))}</TableData>
 									<TableData size="small">{record.remarks || '-'}</TableData>
 									<TableData size="small">{record.location || '-'}</TableData>
 									<TableData size="small">{record.task_type || '-'}</TableData>
