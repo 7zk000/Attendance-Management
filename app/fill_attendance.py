@@ -81,18 +81,17 @@ def calc_row(start_time, end_time, break_time):
 
 def replace_cell_value_only(xml: str, cell_ref: str, value) -> str:
     """数式セルのキャッシュ値(<v>)だけを更新する(数式<f>はそのまま保持)"""
-    import re as _re
     # <v>既存値</v> を <v>新値</v> に置換(数式セル内のみ)
     def replacer(m):
         cell_xml = m.group()
         # <v>...</v>を置換
         new_v = f'<v>{value}</v>'
         if '<v>' in cell_xml:
-            cell_xml = _re.sub(r'<v>[^<]*</v>', new_v, cell_xml)
+            cell_xml = re.sub(r'<v>[^<]*</v>', new_v, cell_xml)
         return cell_xml
 
-    pattern = rf'<c r="{_re.escape(cell_ref)}"[^>]*>.*?</c>'
-    return _re.sub(pattern, replacer, xml, flags=_re.DOTALL)
+    pattern = rf'<c r="{re.escape(cell_ref)}"[^>]*>.*?</c>'
+    return re.sub(pattern, replacer, xml, flags=re.DOTALL)
 
 
 # -------------------------------------------------------
@@ -165,9 +164,9 @@ NO_TIME_REASONS = {'病欠', '有給', '私用のため', '自社用のため'}
 
 def build_work_content_text(location, task_type, remarks):
     """L列(作業内容、勤怠等)に書き込むテキストを組み立てる。
-    - 日勤・夜勤で場所・作業内容が記録されている日は「【場所】作業内容」
-    - 午前休・午後休(場所・作業内容が記録されている)は「【場所】作業内容・午前休」のように休暇種別を付記
-    - 病欠・有給・私用のため・自社用のためなど、時刻を記録しない休みの日はremarksをそのまま表示
+    - 病欠・有給・私用のため・自社用のためなど、時刻を記録しない休みの日は理由をそのまま表示
+    - 午前休・午後休は「【場所】作業内容・午前休」のように休暇種別を付記(場所・作業内容が無ければ休暇種別のみ)
+    - 日勤・夜勤は「【場所】作業内容」。未選択なら空欄(「日勤」などの理由は書かない)
     """
     location = (location or '').strip()
     task_type = (task_type or '').strip()
@@ -179,10 +178,10 @@ def build_work_content_text(location, task_type, remarks):
         return remarks
     if remarks in HALF_DAY_LEAVE_REASONS and (location or task_type):
         return f"{location}{task_type}・{remarks}"
+    if remarks in HALF_DAY_LEAVE_REASONS:
+        return remarks
     if location or task_type:
         return f"{location}{task_type}"
-    if remarks:
-        return remarks
     return None
 
 
@@ -309,7 +308,6 @@ def fetch_all_user_names() -> list:
 
 def fetch_sheet_rows(year: int, month: int, target_name: str) -> list:
     """Supabaseから当月の勤怠データを取得する"""
-    import urllib.parse
     month_start = f"{year}-{month:02d}-01"
     if month == 12:
         next_year, next_month = year + 1, 1
@@ -352,7 +350,9 @@ def fetch_sheet_rows(year: int, month: int, target_name: str) -> list:
         if dt.year != year or dt.month != month:
             continue
 
-        if checkin_str and checkout_str:
+        # 休みの日は時刻が残っていても(以前の打刻フローの記録など)G,H,Iに書かない。
+        # 書くと実際には働いていない日が稼働扱いになってしまう。
+        if checkin_str and checkout_str and remarks not in NO_TIME_REASONS:
             start = parse_time(checkin_str)
             end   = parse_time(checkout_str)
             ci = start.hour * 60 + start.minute
@@ -393,9 +393,26 @@ def list_candidate_excels(folder: str) -> list:
     ]
 
 
+def _normalize_name(name: str) -> str:
+    """名前の比較用に空白(全角・半角)を取り除く"""
+    return re.sub(r'\s+', '', name)
+
+
+def extract_name_from_filename(filename: str):
+    """「作業実績報告書(会社名_名前)_YYYYMM.xlsx」から名前部分を取り出す"""
+    m = re.search(r'[(（][^)）]*_([^)）_]+)[)）]', filename)
+    return m.group(1) if m else None
+
+
 def find_excel_for_name(folder: str, name: str) -> str:
-    """ファイル名に名前が含まれる .xlsx を探す(複数あれば最終更新日時が新しい方)"""
-    candidates = [f for f in list_candidate_excels(folder) if name in os.path.basename(f)]
+    """ファイル名の名前部分が一致する .xlsx を探す(複数あれば最終更新日時が新しい方)。
+    部分一致だと「佐藤」が「佐藤花子」のファイルを拾ってしまうため、名前部分を完全一致で比べる。
+    """
+    target = _normalize_name(name)
+    candidates = [
+        f for f in list_candidate_excels(folder)
+        if _normalize_name(extract_name_from_filename(os.path.basename(f)) or '') == target
+    ]
     if not candidates:
         raise FileNotFoundError(f"「{name}」のテンプレートExcelが見つかりません。")
     candidates.sort(key=os.path.getmtime, reverse=True)

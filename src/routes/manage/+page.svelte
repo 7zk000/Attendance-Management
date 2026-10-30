@@ -16,7 +16,7 @@
 		formatHours,
 		formatRemainingHours,
 		getBusinessDayStats,
-		isMissingCheckout,
+		isOverdueCheckout,
 		NO_TIME_REASONS,
 		toDateInputValue
 	} from '$lib/kintai-utils';
@@ -38,12 +38,6 @@
 		reason,
 		label: reason.replace(/のため$/, '')
 	}));
-
-	// 昨日以降に出勤した記録は夜勤を含めてまだ勤務中の可能性があるので、退勤漏れとは数えない。
-	function isOverdueCheckout(record: { date: string; check_in: string | null; check_out: string | null }) {
-		const yesterday = toDateInputValue(new Date(Date.now() - 24 * 60 * 60 * 1000));
-		return isMissingCheckout(record) && record.date < yesterday;
-	}
 
 	function formatMonthInputValue(date: Date) {
 		return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -116,9 +110,9 @@
 			const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
 			const monthEnd = toDateInputValue(new Date(year, month, 1));
 
-			const rows: SummaryRow[] = [];
-			for (const name of names) {
-				const records = await getMonthRecords(name, monthStart, monthEnd);
+			const recordsByUser = await Promise.all(names.map((name) => getMonthRecords(name, monthStart, monthEnd)));
+			const rows: SummaryRow[] = names.map((name, i) => {
+				const records = recordsByUser[i];
 				const totalHours = records.reduce((sum, r) => sum + countedWorkHours(r), 0);
 				const workDays = records.filter((r) => countedWorkHours(r) > 0).length;
 				const leaveDays = Object.fromEntries(
@@ -127,8 +121,8 @@
 				const missingCheckoutDays = records.filter(isOverdueCheckout).length;
 				const avgHours = workDays > 0 ? totalHours / workDays : 0;
 				const remainingTo200 = Math.max(0, 200 - totalHours);
-				rows.push({ name, totalHours, workDays, leaveDays, missingCheckoutDays, avgHours, remainingTo200 });
-			}
+				return { name, totalHours, workDays, leaveDays, missingCheckoutDays, avgHours, remainingTo200 };
+			});
 			summaryRows = rows.sort((a, b) => b.totalHours - a.totalHours);
 		} catch (error) {
 			console.error(error);
